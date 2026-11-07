@@ -95,6 +95,15 @@ struct PerformanceTelemetry {
     int culledEntities = 0;
     int drawCalls = 0;
     bool showOverlay = false;
+
+    // Detailed Microsecond Subsystem Timers
+    float timeFogTexUs = 0.0f;
+    float timeTerrainUs = 0.0f;
+    float timePropsUs = 0.0f;
+    float timeBuildingsUs = 0.0f;
+    float timeRegimentsUs = 0.0f;
+    float timeParticlesUs = 0.0f;
+    float timeOverheadPlatesUs = 0.0f;
 };
 
 class RTSRenderer {
@@ -187,6 +196,8 @@ private:
     Model terrainModel_{};
     Model waterModel_{};
     Texture2D fogTexture_{};
+    uint32_t lastUploadedFogVersion_ = 0;
+    bool lastRevealAll_ = false;
 
     // AAA Particle Textures (Soft Volumetric Gaussian Billboards)
     Texture2D smokeParticleTex_{};

@@ -180,6 +180,7 @@ struct RTSParticle {
     bool isCrater = false;
     bool isTread = false;
     bool isCasing = false;
+    bool isSettled = false;
     float rotation = 0.0f;
 };
 
@@ -397,6 +398,7 @@ public:
         if (gx < 0 || gx >= kFogGridSize || gz < 0 || gz >= kFogGridSize) return 0;
         return fogGrid_[gz * kFogGridSize + gx];
     }
+    uint32_t getFogVersion() const { return fogVersion_; }
     void setRevealAllForShowcase(bool reveal) { revealAllShowcase_ = reveal; updateFogOfWar(); }
     bool isRevealAllShowcase() const { return revealAllShowcase_; }
     Vector3 getPlayerBasePos() const { return playerBasePos_; }
@@ -443,10 +445,12 @@ private:
     std::vector<RTSWreck> wrecks_;
     std::vector<RTSAirStrike> airStrikes_;
     std::vector<TerrainProp> props_;
+    std::vector<Vector3> boulderPositions_;
     std::vector<std::string> combatLog_;
     std::array<uint8_t, kFogGridSize * kFogGridSize> fogGrid_{};
     bool revealAllShowcase_ = false;
     bool hasWarnedRiverCrossing_ = false;
+    uint32_t fogVersion_ = 1;
     Vector3 playerBasePos_ = {0.0f, 0.0f, 440.0f};
     Vector3 enemyBasePos_  = {0.0f, 0.0f, -440.0f};
     Vector3 lastAlertPos_  = {0.0f, 0.0f, 440.0f};

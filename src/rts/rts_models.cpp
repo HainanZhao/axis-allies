@@ -113,13 +113,8 @@ void drawEntrenchmentRing3D(Vector3 pos, float radius) {
 
 void drawSoldier3D(Vector3 pos, float facingDeg, float walkPhase, bool isWalking, float muzzleFlashTimer,
                    const NationDef& nat, RegimentType type, float timeSec, int memberIdx,
-                   bool isPinned, bool isCrouched) {
+                   bool isPinned, bool isCrouched, int lod) {
     (void)timeSec;
-    float shadowRadiusX = isPinned ? 0.75f : 0.58f;
-    float shadowRadiusZ = isPinned ? 1.15f : 0.58f;
-    DrawSoftShadowDisc(pos, shadowRadiusX, shadowRadiusZ);
-
-    float stride = isWalking ? std::sin(walkPhase) * 0.22f : 0.0f;
     Color tunicCol  = nat.primaryColor;
     Color pantsCol  = Shade(nat.primaryColor, 0.76f);
     Color helmetCol = Shade(nat.primaryColor, 0.68f);
@@ -127,6 +122,68 @@ void drawSoldier3D(Vector3 pos, float facingDeg, float walkPhase, bool isWalking
     Color packCol   = {122, 106, 74, 255};
     Color gunMetal  = {38, 42, 45, 255};
     Color woodStock = {112, 72, 38, 255};
+
+    if (lod >= 2) {
+        // LOD 2: Ultra-Fast Minimalist Silhouette (Distant units > 82m)
+        DrawCircle3D({pos.x, pos.y + 0.03f, pos.z}, 0.50f, {1, 0, 0}, 90.0f, ColorAlpha(BLACK, 0.35f));
+        rlPushMatrix();
+        rlTranslatef(pos.x, pos.y, pos.z);
+        rlRotatef(facingDeg, 0.0f, 1.0f, 0.0f);
+        if (isPinned) {
+            rlTranslatef(0.0f, 0.12f, 0.22f);
+            rlRotatef(-76.0f, 1.0f, 0.0f, 0.0f);
+        } else if (isCrouched) {
+            rlTranslatef(0.0f, -0.30f, 0.0f);
+        }
+        DrawCube({0.0f, 0.75f, 0.0f}, 0.54f, 1.25f, 0.32f, tunicCol);
+        DrawSphere({0.0f, 1.48f, 0.0f}, 0.26f, helmetCol);
+        rlPopMatrix();
+        return;
+    }
+
+    if (lod == 1) {
+        // LOD 1: Clean Tactical RTS Squad Member (38m - 82m)
+        DrawCircle3D({pos.x, pos.y + 0.03f, pos.z}, 0.55f, {1, 0, 0}, 90.0f, ColorAlpha(BLACK, 0.40f));
+        float stride = isWalking ? std::sin(walkPhase) * 0.20f : 0.0f;
+
+        rlPushMatrix();
+        rlTranslatef(pos.x, pos.y, pos.z);
+        rlRotatef(facingDeg, 0.0f, 1.0f, 0.0f);
+
+        if (isPinned) {
+            rlTranslatef(0.0f, 0.14f, 0.22f);
+            rlRotatef(-76.0f, 1.0f, 0.0f, 0.0f);
+        } else if (isCrouched) {
+            rlTranslatef(0.0f, -0.32f, 0.0f);
+        }
+
+        // Left & Right legs
+        DrawCube({-0.16f, 0.32f,  stride}, 0.18f, 0.62f, 0.20f, pantsCol);
+        DrawCube({ 0.16f, 0.32f, -stride}, 0.18f, 0.62f, 0.20f, pantsCol);
+
+        // Torso
+        DrawCube({0.0f, 0.92f, 0.0f}, 0.56f, 0.68f, 0.34f, tunicCol);
+
+        // Head & Helmet
+        DrawSphere({0.0f, 1.44f, 0.02f}, 0.21f, skinCol);
+        DrawSphere({0.0f, 1.54f, 0.0f}, 0.26f, helmetCol);
+
+        // Service weapon
+        DrawCube({0.10f, 1.04f, 0.55f}, 0.08f, 0.12f, 1.10f, woodStock);
+        DrawCylinderEx({0.10f, 1.08f, 0.25f}, {0.10f, 1.08f, 1.35f}, 0.04f, 0.035f, 6, gunMetal);
+
+        if (muzzleFlashTimer > 0.0f) {
+            DrawSphere({0.10f, 1.08f, 1.45f}, 0.25f, {255, 240, 150, 255});
+        }
+        rlPopMatrix();
+        return;
+    }
+
+    float shadowRadiusX = isPinned ? 0.75f : 0.58f;
+    float shadowRadiusZ = isPinned ? 1.15f : 0.58f;
+    DrawSoftShadowDisc(pos, shadowRadiusX, shadowRadiusZ);
+
+    float stride = isWalking ? std::sin(walkPhase) * 0.22f : 0.0f;
 
     rlPushMatrix();
     rlTranslatef(pos.x, pos.y, pos.z);
@@ -211,20 +268,89 @@ void drawSoldier3D(Vector3 pos, float facingDeg, float walkPhase, bool isWalking
 
 void drawTank3D(Vector3 pos, float hullFacingDeg, float turretFacingDeg, float recoil, float muzzleFlashTimer,
                 const NationDef& nat, RegimentType type, float timeSec,
-                float pitchDeg, float rollDeg) {
+                float pitchDeg, float rollDeg, int lod) {
     float s = 1.0f;
     if (type == RegimentType::HEAVY_TANK) s = 1.25f;
     else if (type == RegimentType::ELITE_SIGNATURE_TANK) s = 1.38f;
     else if (type == RegimentType::TANK_DESTROYER) s = 1.08f;
 
-    DrawSoftShadowDisc(pos, 2.75f * s, 3.85f * s);
-
     Color armorBase  = nat.primaryColor;
     Color armorLight = Shade(armorBase, 1.14f);
     Color armorDark  = Shade(armorBase, 0.78f);
     Color trackSteel = {42, 45, 48, 255};
-    Color wheelSteel = {68, 72, 75, 255};
     Color barrelSteel = {38, 42, 45, 255};
+
+    float trackX = 1.44f * s;
+    float trackLen = 4.75f * s;
+    float trackH = 0.88f * s;
+    float yaw = (type == RegimentType::TANK_DESTROYER) ? hullFacingDeg : turretFacingDeg;
+
+    if (lod >= 2) {
+        // LOD 2: Ultra-Fast Distant Silhouette (Distant units > 82m)
+        DrawCircle3D({pos.x, pos.y + 0.05f, pos.z}, 3.2f * s, {1, 0, 0}, 90.0f, ColorAlpha(BLACK, 0.35f));
+        rlPushMatrix();
+        rlTranslatef(pos.x, pos.y, pos.z);
+        rlRotatef(hullFacingDeg, 0.0f, 1.0f, 0.0f);
+        DrawCube({-trackX, trackH * 0.5f, 0.0f}, 0.65f * s, trackH, trackLen, trackSteel);
+        DrawCube({ trackX, trackH * 0.5f, 0.0f}, 0.65f * s, trackH, trackLen, trackSteel);
+        DrawCube({0.0f, 0.88f * s, 0.0f}, 2.45f * s, 0.85f * s, 4.35f * s, armorBase);
+        rlPopMatrix();
+
+        rlPushMatrix();
+        rlTranslatef(pos.x, pos.y + 1.56f * s, pos.z);
+        rlRotatef(yaw, 0.0f, 1.0f, 0.0f);
+        DrawCube({0.0f, 0.12f * s, -0.10f * s}, 1.95f * s, 0.82f * s, 2.30f * s, armorLight);
+        float bLen = (type == RegimentType::TANK_DESTROYER) ? 5.5f * s : 4.4f * s;
+        DrawCylinderEx({0.0f, 0.14f * s, 0.9f * s}, {0.0f, 0.14f * s, bLen}, 0.12f * s, 0.09f * s, 6, barrelSteel);
+        rlPopMatrix();
+        return;
+    }
+
+    if (lod == 1) {
+        // LOD 1: Pristine Tactical RTS Combat Silhouette (38m - 82m)
+        DrawCircle3D({pos.x, pos.y + 0.05f, pos.z}, 3.5f * s, {1, 0, 0}, 90.0f, ColorAlpha(BLACK, 0.40f));
+
+        rlPushMatrix();
+        rlTranslatef(pos.x, pos.y, pos.z);
+        rlRotatef(hullFacingDeg, 0.0f, 1.0f, 0.0f);
+        rlRotatef(pitchDeg, 1.0f, 0.0f, 0.0f);
+        rlRotatef(rollDeg, 0.0f, 0.0f, 1.0f);
+
+        // Track assemblies + side skirts
+        DrawCube({-trackX, trackH * 0.5f, 0.0f}, 0.65f * s, trackH, trackLen, trackSteel);
+        DrawCube({ trackX, trackH * 0.5f, 0.0f}, 0.65f * s, trackH, trackLen, trackSteel);
+        DrawCube({-trackX, 0.85f * s, 0.0f}, 0.68f * s, 0.28f * s, trackLen * 0.98f, armorDark);
+        DrawCube({ trackX, 0.85f * s, 0.0f}, 0.68f * s, 0.28f * s, trackLen * 0.98f, armorDark);
+
+        // Lower hull & sloped front glacis
+        DrawCube({0.0f, 0.86f * s, 0.0f}, 2.45f * s, 0.88f * s, 4.35f * s, armorBase);
+        DrawCube({0.0f, 1.15f * s, 1.60f * s}, 2.38f * s, 0.45f * s, 1.25f * s, armorLight);
+        DrawCube({0.0f, 1.32f * s, -1.25f * s}, 1.4f * s, 0.06f * s, 1.10f * s, {28, 32, 34, 255});
+        rlPopMatrix();
+
+        // Rotating Turret + Mantlet + Main Gun
+        rlPushMatrix();
+        rlTranslatef(pos.x, pos.y + 1.56f * s, pos.z);
+        rlRotatef(yaw, 0.0f, 1.0f, 0.0f);
+
+        DrawCube({0.0f, 0.12f * s, -0.10f * s}, 1.95f * s, 0.84f * s, 2.32f * s, armorLight);
+        DrawCube({0.0f, 0.14f * s, -1.35f * s}, 1.48f * s, 0.58f * s, 0.56f * s, armorDark);
+        DrawCylinder({-0.42f * s, 0.52f * s, -0.25f * s}, 0.38f * s, 0.40f * s, 0.30f * s, 8, armorDark);
+        DrawCube({0.0f, 0.14f * s, 1.12f * s}, 0.98f * s, 0.68f * s, 0.48f * s, armorDark);
+
+        float bLen = (type == RegimentType::TANK_DESTROYER) ? 5.8f * s : 4.8f * s;
+        DrawCylinderEx({0.0f, 0.14f * s, 1.1f * s}, {0.0f, 0.14f * s, bLen}, 0.11f * s, 0.08f * s, 8, barrelSteel);
+        DrawCube({0.0f, 0.14f * s, bLen}, 0.28f * s, 0.22f * s, 0.36f * s, barrelSteel);
+
+        if (muzzleFlashTimer > 0.0f) {
+            DrawSphere({0.0f, 0.14f * s, bLen + 0.4f * s}, 0.55f * s, {255, 235, 120, 255});
+        }
+        rlPopMatrix();
+        return;
+    }
+
+    DrawSoftShadowDisc(pos, 2.75f * s, 3.85f * s);
+    Color wheelSteel = {68, 72, 75, 255};
     Color toolWood   = {115, 78, 44, 255};
 
     if (muzzleFlashTimer > 0.0f) {
@@ -256,9 +382,9 @@ void drawTank3D(Vector3 pos, float hullFacingDeg, float turretFacingDeg, float r
     rlRotatef(rollDeg, 0.0f, 0.0f, 1.0f);                 // Suspension terrain roll along slope bank
 
     // 1. Heavy Caterpillar Track Assemblies, 5 Roadwheels, 3 Upper Return Rollers, Idler & Drive Sprocket
-    float trackX = 1.44f * s;
-    float trackLen = 4.75f * s;
-    float trackH = 0.88f * s;
+    trackX = 1.44f * s;
+    trackLen = 4.75f * s;
+    trackH = 0.88f * s;
 
     // Track rubber/steel continuous treads
     DrawBeveledBox({-trackX, trackH * 0.5f, 0.0f}, 0.64f * s, trackH, trackLen, trackSteel);
@@ -354,7 +480,7 @@ void drawTank3D(Vector3 pos, float hullFacingDeg, float turretFacingDeg, float r
     // 5. Rotating Turret, Gun Mantlet, Cupola, Stowage Bustle & Main Cannon
     rlPushMatrix();
     rlTranslatef(pos.x, pos.y + 1.56f * s, pos.z);
-    float yaw = (type == RegimentType::TANK_DESTROYER) ? hullFacingDeg : turretFacingDeg;
+    yaw = (type == RegimentType::TANK_DESTROYER) ? hullFacingDeg : turretFacingDeg;
     rlRotatef(yaw, 0.0f, 1.0f, 0.0f);
 
     // Main turret housing with beveled chamfers
@@ -412,15 +538,71 @@ void drawTank3D(Vector3 pos, float hullFacingDeg, float turretFacingDeg, float r
 
 void drawVehicle3D(Vector3 pos, float facingDeg, float recoil, float muzzleFlashTimer,
                    const NationDef& nat, RegimentType type, BuildingType packedBldg, float timeSec,
-                   float pitchDeg, float rollDeg) {
+                   float pitchDeg, float rollDeg, int lod) {
     (void)packedBldg;
-    DrawSoftShadowDisc(pos, 2.2f, 3.1f);
-
     Color bodyCol   = nat.primaryColor;
     Color cabCol    = Shade(bodyCol, 1.12f);
     Color chassis   = {42, 46, 48, 255};
     Color tireCol   = {26, 28, 30, 255};
     Color glassCol  = {85, 130, 155, 235};
+
+    if (lod >= 2) {
+        // LOD 2: Distant silhouette (> 82m)
+        DrawCircle3D({pos.x, pos.y + 0.05f, pos.z}, 3.0f, {1, 0, 0}, 90.0f, ColorAlpha(BLACK, 0.35f));
+        rlPushMatrix();
+        rlTranslatef(pos.x, pos.y, pos.z);
+        rlRotatef(facingDeg, 0.0f, 1.0f, 0.0f);
+        DrawCube({0.0f, 0.55f, 0.0f}, 2.15f, 0.42f, 4.45f, chassis);
+        DrawCube({0.0f, 1.25f, 0.40f}, 1.95f, 0.95f, 3.20f, bodyCol);
+        rlPopMatrix();
+        return;
+    }
+
+    if (lod == 1) {
+        // LOD 1: Tactical RTS vehicle silhouette (38m - 82m)
+        DrawCircle3D({pos.x, pos.y + 0.05f, pos.z}, 3.2f, {1, 0, 0}, 90.0f, ColorAlpha(BLACK, 0.40f));
+        rlPushMatrix();
+        rlTranslatef(pos.x, pos.y, pos.z);
+        rlRotatef(facingDeg, 0.0f, 1.0f, 0.0f);
+        rlRotatef(pitchDeg, 1.0f, 0.0f, 0.0f);
+        rlRotatef(rollDeg, 0.0f, 0.0f, 1.0f);
+
+        // Chassis & Wheels / Tracks
+        DrawCube({0.0f, 0.55f, 0.0f}, 2.15f, 0.42f, 4.45f, chassis);
+        DrawCube({-1.05f, 0.46f, 1.45f}, 0.35f, 0.70f, 0.85f, tireCol);
+        DrawCube({ 1.05f, 0.46f, 1.45f}, 0.35f, 0.70f, 0.85f, tireCol);
+        DrawCube({-1.05f, 0.46f, -0.85f}, 0.45f, 0.70f, 2.40f, tireCol);
+        DrawCube({ 1.05f, 0.46f, -0.85f}, 0.45f, 0.70f, 2.40f, tireCol);
+
+        // Cab & Hood
+        DrawCube({0.0f, 1.05f, 1.55f}, 1.85f, 0.75f, 1.35f, bodyCol);
+        DrawCube({0.0f, 1.38f, 0.55f}, 1.95f, 0.95f, 1.10f, cabCol);
+        DrawCube({0.0f, 1.55f, 1.11f}, 1.65f, 0.42f, 0.06f, glassCol); // Windshield
+
+        // Specialized Rear Mounts
+        if (type == RegimentType::KATYUSHA_ROCKET) {
+            rlPushMatrix();
+            rlTranslatef(0.0f, 1.45f, -0.95f);
+            rlRotatef(-28.0f, 1.0f, 0.0f, 0.0f);
+            DrawCube({0.0f, 0.0f, 0.0f}, 1.95f, 0.18f, 2.65f, {68, 76, 64, 255});
+            DrawCube({0.0f, 0.22f, 0.0f}, 1.85f, 0.15f, 2.50f, {225, 228, 215, 255});
+            rlPopMatrix();
+        } else if (type == RegimentType::MOBILE_ARTILLERY) {
+            DrawCube({0.0f, 1.35f, -0.65f}, 2.12f, 1.05f, 2.35f, bodyCol);
+            DrawCylinderEx({0.0f, 1.65f, -0.25f}, {0.0f, 2.45f, 2.95f}, 0.20f, 0.17f, 8, {48, 54, 56, 255});
+        } else if (type == RegimentType::AA_HALFTRACK) {
+            DrawCube({0.0f, 1.25f, -0.85f}, 1.95f, 0.75f, 2.20f, bodyCol);
+            DrawCylinderEx({0.0f, 1.75f, -0.85f}, {0.0f, 2.35f, 0.45f}, 0.12f, 0.08f, 8, {48, 54, 56, 255});
+        } else {
+            // Troop transport cargo bed
+            DrawCube({0.0f, 1.15f, -0.95f}, 2.05f, 0.75f, 2.45f, bodyCol);
+        }
+
+        rlPopMatrix();
+        return;
+    }
+
+    DrawSoftShadowDisc(pos, 2.2f, 3.1f);
 
     rlPushMatrix();
     rlTranslatef(pos.x, pos.y, pos.z);
@@ -606,9 +788,13 @@ void drawFighterAircraft3D(Vector3 pos, float facingDeg, float rollDeg, const Na
     rlPopMatrix();
 }
 
-void drawDetailedRegiment3D(const RegimentInstance& reg, const NationDef& nat, const RegimentDef& rDef, float timeSec) {
+void drawDetailedRegiment3D(const RegimentInstance& reg, const NationDef& nat, const RegimentDef& rDef, float timeSec, int lod) {
     if (reg.stance == FormationStance::ENTRENCHED) {
-        drawEntrenchmentRing3D(reg.pos, (rDef.category == UnitCategory::INFANTRY) ? 4.3f : 5.6f);
+        if (lod >= 2) {
+            DrawCircle3D({reg.pos.x, reg.pos.y + 0.08f, reg.pos.z}, 4.8f, {1, 0, 0}, 90.0f, ColorAlpha(GOLD, 0.45f));
+        } else {
+            drawEntrenchmentRing3D(reg.pos, (rDef.category == UnitCategory::INFANTRY) ? 4.3f : 5.6f);
+        }
     }
 
     bool isWalking = (reg.order == OrderType::MOVE || reg.order == OrderType::ATTACK_MOVE);
@@ -620,20 +806,24 @@ void drawDetailedRegiment3D(const RegimentInstance& reg, const NationDef& nat, c
 
         if (rDef.category == UnitCategory::INFANTRY) {
             drawSoldier3D(m.worldPos, reg.facing, m.walkPhase, isWalking, m.muzzleFlashTimer,
-                          nat, reg.type, timeSec, static_cast<int>(i), isPinned, isCrouched);
+                          nat, reg.type, timeSec, static_cast<int>(i), isPinned, isCrouched, lod);
         } else if (rDef.category == UnitCategory::ARMOR) {
             drawTank3D(m.worldPos, reg.facing, m.turretAngleRad * RAD2DEG, m.recoil, m.muzzleFlashTimer,
-                       nat, reg.type, timeSec);
+                       nat, reg.type, timeSec, 0.0f, 0.0f, lod);
         } else {
             drawVehicle3D(m.worldPos, reg.facing, m.recoil, m.muzzleFlashTimer,
-                          nat, reg.type, reg.packedBuildingType, timeSec);
+                          nat, reg.type, reg.packedBuildingType, timeSec, 0.0f, 0.0f, lod);
         }
     }
 }
 
-void drawDetailedRegiment3D(const RTSRegiment& reg, const NationDef& nat, const RegimentDef& rDef, float timeSec) {
+void drawDetailedRegiment3D(const RTSRegiment& reg, const NationDef& nat, const RegimentDef& rDef, float timeSec, int lod) {
     if (reg.stance == FormationStance::ENTRENCHED) {
-        drawEntrenchmentRing3D(reg.pos, (rDef.category == UnitCategory::INFANTRY) ? 4.3f : 5.6f);
+        if (lod >= 2) {
+            DrawCircle3D({reg.pos.x, reg.pos.y + 0.08f, reg.pos.z}, 4.8f, {1, 0, 0}, 90.0f, ColorAlpha(GOLD, 0.45f));
+        } else {
+            drawEntrenchmentRing3D(reg.pos, (rDef.category == UnitCategory::INFANTRY) ? 4.3f : 5.6f);
+        }
     }
 
     bool isWalking = (Vector3Distance(reg.pos, reg.targetPos) > 1.2f);
@@ -646,13 +836,13 @@ void drawDetailedRegiment3D(const RTSRegiment& reg, const NationDef& nat, const 
         float muzzleFlash = (m.recoil > 0.32f) ? (m.recoil * 0.15f) : 0.0f;
         if (rDef.category == UnitCategory::INFANTRY) {
             drawSoldier3D(m.worldPos, reg.facing, m.animPhase, isWalking, muzzleFlash,
-                          nat, reg.type, timeSec, static_cast<int>(i), isPinned, isCrouched);
+                          nat, reg.type, timeSec, static_cast<int>(i), isPinned, isCrouched, lod);
         } else if (rDef.category == UnitCategory::ARMOR) {
             drawTank3D(m.worldPos, reg.facing, m.turretYaw, m.recoil, muzzleFlash,
-                       nat, reg.type, timeSec, m.pitchDeg, m.rollDeg);
+                       nat, reg.type, timeSec, m.pitchDeg, m.rollDeg, lod);
         } else {
             drawVehicle3D(m.worldPos, reg.facing, m.recoil, muzzleFlash,
-                          nat, reg.type, reg.packedBuildingType, timeSec, m.pitchDeg, m.rollDeg);
+                          nat, reg.type, reg.packedBuildingType, timeSec, m.pitchDeg, m.rollDeg, lod);
         }
     }
 }
@@ -1077,7 +1267,24 @@ void drawDetailedBuilding3D(const BuildingInstance& b, const NationDef& nat, con
     drawDetailedBuildingImpl(b, nat, bDef, timeSec);
 }
 
-void drawDetailedTree3D(Vector3 pos, float scale, BiomeType biome, float timeSec) {
+void drawDetailedTree3D(Vector3 pos, float scale, BiomeType biome, float timeSec, int lod) {
+    if (lod >= 1) {
+        // Fast simplified tree: 1 trunk + 1 canopy shape
+        Color trunkCol = {82, 56, 34, 255};
+        DrawCylinderEx(pos, {pos.x, pos.y + 3.4f * scale, pos.z}, 0.48f * scale, 0.30f * scale, 6, trunkCol);
+        if (biome == BiomeType::STALINGRAD_WINTER || biome == BiomeType::ARDENNES_WINTER) {
+            Color pineDark = {32, 64, 38, 255};
+            DrawCylinderEx({pos.x, pos.y + 2.0f * scale, pos.z}, {pos.x, pos.y + 7.5f * scale, pos.z}, 2.4f * scale, 0.25f * scale, 6, pineDark);
+        } else if (biome == BiomeType::EL_ALAMEIN_DESERT || biome == BiomeType::PACIFIC_ATOLL) {
+            Color palmGreen = {52, 102, 38, 255};
+            DrawSphere({pos.x, pos.y + 4.2f * scale, pos.z}, 1.85f * scale, palmGreen);
+        } else {
+            Color oakBase = {42, 82, 34, 255};
+            DrawSphere({pos.x, pos.y + 5.0f * scale, pos.z}, 2.4f * scale, oakBase);
+        }
+        return;
+    }
+
     DrawSoftShadowDisc(pos, 2.6f * scale, 2.6f * scale);
 
     // Subtle atmospheric wind sway propagating across the canopy

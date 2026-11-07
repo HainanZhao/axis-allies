@@ -24,10 +24,13 @@ int main(int argc, char** argv) {
     std::filesystem::create_directories("saves", ec);
 
     bool runSelfTest = false;
+    bool runProfile = false;
     std::string captureDir;
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "--self-test") == 0) {
             runSelfTest = true;
+        } else if (std::strcmp(argv[i], "--profile") == 0) {
+            runProfile = true;
         } else if (std::strcmp(argv[i], "--capture-previews") == 0 && i + 1 < argc) {
             captureDir = argv[++i];
         }
@@ -44,7 +47,7 @@ int main(int argc, char** argv) {
     // 2. FLAG_VSYNC_HINT syncs to macOS display refresh smoothly without busy-waiting.
     // 3. Omitted 4x MSAA to eliminate 20.7 million sample overhead per frame on Retina, saving ~75% GPU TDP.
     unsigned int winFlags = FLAG_WINDOW_HIGHDPI | FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE;
-    if (!captureDir.empty()) {
+    if (!captureDir.empty() || runProfile) {
         winFlags |= FLAG_WINDOW_HIDDEN;
     }
     SetConfigFlags(winFlags);
@@ -58,6 +61,13 @@ int main(int argc, char** argv) {
 
     aa2004::AxisAlliesApp app;
     app.init(false);
+
+    if (runProfile) {
+        app.runProfilingBenchmark();
+        app.shutdown();
+        CloseWindow();
+        return 0;
+    }
 
     if (!captureDir.empty()) {
         std::error_code dirEc;

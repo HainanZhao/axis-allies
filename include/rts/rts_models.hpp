@@ -157,8 +157,8 @@ using aa2004::BuildingInstance;
 // ============================================================================
 
 // 1. Draw Detailed Regiment with multi-part soldiers/vehicles, stance entrenchments & shadow discs
-void drawDetailedRegiment3D(const RegimentInstance& reg, const NationDef& nat, const RegimentDef& rDef, float timeSec);
-void drawDetailedRegiment3D(const RTSRegiment& reg, const NationDef& nat, const RegimentDef& rDef, float timeSec);
+void drawDetailedRegiment3D(const RegimentInstance& reg, const NationDef& nat, const RegimentDef& rDef, float timeSec, int lod = 0);
+void drawDetailedRegiment3D(const RTSRegiment& reg, const NationDef& nat, const RegimentDef& rDef, float timeSec, int lod = 0);
 
 // 2. Draw Detailed Building (Corps HQ, Barracks, Airfield, Factory, Refinery, City, Bunker, AA Battery)
 void drawDetailedBuilding3D(const BuildingInstance& b, const NationDef& nat, const BuildingDef& bDef, float timeSec);
@@ -166,7 +166,7 @@ void drawDetailedBuilding3D(const RTSBuilding& b, const NationDef& nat, const Bu
 void drawConstructionSite3D(const RTSBuilding& b, const NationDef& nat, const BuildingDef& bDef, float timeSec);
 
 // 3. Draw Detailed Biome Tree (Winter Pines with snow, Normandy Oaks, Pacific/Desert Palms)
-void drawDetailedTree3D(Vector3 pos, float scale, BiomeType biome, float timeSec = 0.0f);
+void drawDetailedTree3D(Vector3 pos, float scale, BiomeType biome, float timeSec = 0.0f, int lod = 0);
 
 // 4. Draw Detailed Battlefield Environment Props
 void drawBocageHedge3D(Vector3 pos, float scale, float rotation);
@@ -179,15 +179,15 @@ void drawRockFormation3D(Vector3 pos, float scale, float rotation);
 // Modular Sub-Component Renderers
 void drawSoldier3D(Vector3 pos, float facingDeg, float walkPhase, bool isWalking, float muzzleFlashTimer,
                    const NationDef& nat, RegimentType type, float timeSec, int memberIdx = 0,
-                   bool isPinned = false, bool isCrouched = false);
+                   bool isPinned = false, bool isCrouched = false, int lod = 0);
 
 void drawTank3D(Vector3 pos, float hullFacingDeg, float turretFacingDeg, float recoil, float muzzleFlashTimer,
                 const NationDef& nat, RegimentType type, float timeSec,
-                float pitchDeg = 0.0f, float rollDeg = 0.0f);
+                float pitchDeg = 0.0f, float rollDeg = 0.0f, int lod = 0);
 
 void drawVehicle3D(Vector3 pos, float facingDeg, float recoil, float muzzleFlashTimer,
                    const NationDef& nat, RegimentType type, BuildingType packedBldg, float timeSec,
-                   float pitchDeg = 0.0f, float rollDeg = 0.0f);
+                   float pitchDeg = 0.0f, float rollDeg = 0.0f, int lod = 0);
 
 void drawAircraft3D(Vector3 pos, float facingDeg, const NationDef& nat, float propAngleDeg);
 void drawFighterAircraft3D(Vector3 pos, float facingDeg, float rollDeg, const NationDef& nat, float propAngleDeg, bool firingGuns = false);

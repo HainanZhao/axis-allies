@@ -254,6 +254,7 @@ bool RTSEngine::isPosExploredByPlayer(Vector3 pos) const {
 }
 
 void RTSEngine::updateFogOfWar() {
+    fogVersion_++;
     if (revealAllShowcase_ || players_[0].radarRevealTimer > 0.0f) {
         fogGrid_.fill(2);
         return;
@@ -317,6 +318,7 @@ void RTSEngine::startBattle(const RTSBattleConfig& cfg, SoundEngine* sound) {
     particles_.clear();
     airStrikes_.clear();
     props_.clear();
+    boulderPositions_.clear();
     combatLog_.clear();
     fogGrid_.fill(0);
     revealAllShowcase_ = false;
@@ -608,6 +610,9 @@ void RTSEngine::startBattle(const RTSBattleConfig& cfg, SoundEngine* sound) {
             else if (m == 5) p.propType = 4; // ruined stone wall
             else if (m == 6) p.propType = 6; // telephone pole
             else p.propType = 7; // sandbag checkpoint
+        }
+        if (p.propType == 3) {
+            boulderPositions_.push_back(p.pos);
         }
         props_.push_back(p);
     }
@@ -1116,8 +1121,8 @@ void RTSEngine::updateRegiments(float dt) {
             }
             // 2. Proximity to boulder rock formations
             if (r.coverTier < 2) {
-                for (const auto& prop : props_) {
-                    if (prop.propType == 3 && distXZ(r.pos, prop.pos) <= 6.5f) {
+                for (const auto& bPos : boulderPositions_) {
+                    if (distXZ(r.pos, bPos) <= 6.5f) {
                         r.coverTier = 2; // Heavy Boulder Cover (-40%)
                         break;
                     }
@@ -1436,8 +1441,8 @@ void RTSEngine::updateRegiments(float dt) {
             if (su.recoil > 0.0f) su.recoil = std::max(0.0f, su.recoil - dt * 3.0f);
             if (isMoving) su.animPhase += dt * 9.0f;
 
-            // Vehicle slope alignment (Terrain Normal IK Pitch & Roll)
-            if (def.category == UnitCategory::ARMOR || def.category == UnitCategory::MECHANIZED || def.category == UnitCategory::ARTILLERY) {
+            // Vehicle slope alignment (Terrain Normal IK Pitch & Roll: only recalculated during motion)
+            if (isMoving && (def.category == UnitCategory::ARMOR || def.category == UnitCategory::MECHANIZED || def.category == UnitCategory::ARTILLERY)) {
                 float fRad = r.facing * DEG2RAD;
                 Vector3 fwd = { std::sin(fRad), 0.0f, std::cos(fRad) };
                 Vector3 rgt = { fwd.z, 0.0f, -fwd.x };
@@ -1953,54 +1958,67 @@ void RTSEngine::updateAirStrikes(float dt) {
 }
 
 void RTSEngine::updateParticles(float dt) {
-    for (auto it = particles_.begin(); it != particles_.end();) {
-        it->life -= dt;
-        if (it->life <= 0.0f) {
-            it = particles_.erase(it);
-        } else {
-            if (it->isCasing) {
-                float groundY = getTerrainHeight(it->pos.x, it->pos.z) + 0.04f;
-                if (it->pos.y > groundY) {
-                    it->pos = Vector3Add(it->pos, Vector3Scale(it->vel, dt));
-                    it->vel.y -= 14.0f * dt;
-                    if (it->pos.y <= groundY) {
-                        it->pos.y = groundY;
-                        it->vel = {0.0f, 0.0f, 0.0f}; // Settles on the ground
-                    }
-                }
-            } else if (!it->isRing && !it->isCrater && !it->isTread) {
-                it->pos = Vector3Add(it->pos, Vector3Scale(it->vel, dt));
-                it->vel.y -= 9.8f * dt;
-                float groundY = getTerrainHeight(it->pos.x, it->pos.z) + 0.1f;
-                if (it->pos.y < groundY) {
-                    it->pos.y = groundY;
-                    it->vel.y *= -0.3f;
-                }
-            } else if (it->isRing) {
-                it->size += dt * 18.0f;
-            }
-            ++it;
+    for (size_t i = 0; i < particles_.size();) {
+        auto& p = particles_[i];
+        p.life -= dt;
+        if (p.life <= 0.0f) {
+            particles_[i] = particles_.back();
+            particles_.pop_back();
+            continue;
         }
+
+        if (p.isCasing) {
+            if (!p.isSettled) {
+                float groundY = getTerrainHeight(p.pos.x, p.pos.z) + 0.04f;
+                if (p.pos.y > groundY) {
+                    p.pos = Vector3Add(p.pos, Vector3Scale(p.vel, dt));
+                    p.vel.y -= 14.0f * dt;
+                    if (p.pos.y <= groundY) {
+                        p.pos.y = groundY;
+                        p.vel = {0.0f, 0.0f, 0.0f};
+                        p.isSettled = true;
+                    }
+                } else {
+                    p.pos.y = groundY;
+                    p.vel = {0.0f, 0.0f, 0.0f};
+                    p.isSettled = true;
+                }
+            }
+        } else if (!p.isRing && !p.isCrater && !p.isTread) {
+            p.pos = Vector3Add(p.pos, Vector3Scale(p.vel, dt));
+            p.vel.y -= 9.8f * dt;
+            float groundY = getTerrainHeight(p.pos.x, p.pos.z) + 0.1f;
+            if (p.pos.y < groundY) {
+                p.pos.y = groundY;
+                p.vel.y *= -0.3f;
+            }
+        } else if (p.isRing) {
+            p.size += dt * 18.0f;
+        }
+        ++i;
     }
 
-    for (auto it = wrecks_.begin(); it != wrecks_.end();) {
-        it->life -= dt;
-        if (it->life <= 0.0f) {
-            it = wrecks_.erase(it);
-        } else {
-            // Periodic smoldering smoke wisp from burned-out engine deck
-            if (static_cast<int>(it->life * 3.5f) != static_cast<int>((it->life - dt) * 3.5f)) {
-                RTSParticle smoke{};
-                smoke.pos = {it->pos.x, it->pos.y + 1.2f, it->pos.z};
-                smoke.vel = {((nextEntityId_ % 5) - 2) * 0.15f, 1.4f, ((nextEntityId_ % 5) - 2) * 0.15f};
-                smoke.color = {55, 52, 48, 140};
-                smoke.size = 0.95f;
-                smoke.life = 0.65f;
-                smoke.maxLife = 0.65f;
-                particles_.push_back(smoke);
-            }
-            ++it;
+    for (size_t i = 0; i < wrecks_.size();) {
+        auto& w = wrecks_[i];
+        w.life -= dt;
+        if (w.life <= 0.0f) {
+            wrecks_[i] = wrecks_.back();
+            wrecks_.pop_back();
+            continue;
         }
+
+        // Periodic smoldering smoke wisp from burned-out engine deck
+        if (static_cast<int>(w.life * 3.5f) != static_cast<int>((w.life - dt) * 3.5f)) {
+            RTSParticle smoke{};
+            smoke.pos = {w.pos.x, w.pos.y + 1.2f, w.pos.z};
+            smoke.vel = {((nextEntityId_ % 5) - 2) * 0.15f, 1.4f, ((nextEntityId_ % 5) - 2) * 0.15f};
+            smoke.color = {55, 52, 48, 140};
+            smoke.size = 0.95f;
+            smoke.life = 0.65f;
+            smoke.maxLife = 0.65f;
+            particles_.push_back(smoke);
+        }
+        ++i;
     }
 }
 

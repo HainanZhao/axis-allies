@@ -7,6 +7,7 @@
 #include "ui/ui_theme.hpp"
 #include "raymath.h"
 #include "rlgl.h"
+#include <chrono>
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -214,6 +215,7 @@ void RTSRenderer::initForBattle(const RTSEngine& engine) {
     attackMoveMode_   = false;
     cameraShakeIntensity_ = 0.0f;
     cameraShakeTimer_ = 0.0f;
+    lastUploadedFogVersion_ = 0;
 }
 
 void RTSRenderer::addCameraShake(float intensity, float duration) {
@@ -932,7 +934,12 @@ void RTSRenderer::drawAtmosphericSkyBackdrop(BiomeType biome) const {
 
 void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
     ensureShadersAndMeshesLoaded();
+
+    auto tFogStart = std::chrono::high_resolution_clock::now();
     updateFogTexture(engine);
+    auto tFogEnd = std::chrono::high_resolution_clock::now();
+    telemetry_.timeFogTexUs = std::chrono::duration<float, std::micro>(tFogEnd - tFogStart).count();
+
     updateFrustum();
 
     telemetry_.fps = static_cast<float>(GetFPS());
@@ -945,8 +952,11 @@ void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
 
     BeginMode3D(camera_);
 
+    auto tTerrainStart = std::chrono::high_resolution_clock::now();
     drawTerrainAndWater(engine);
     drawSupplyNetwork(engine);
+    auto tTerrainEnd = std::chrono::high_resolution_clock::now();
+    telemetry_.timeTerrainUs = std::chrono::duration<float, std::micro>(tTerrainEnd - tTerrainStart).count();
 
     if (unitShader_.id != 0) {
         int biomeId = static_cast<int>(engine.getConfig().biome);
@@ -960,6 +970,7 @@ void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
     if (quality_ == GraphicQuality::LOW) maxDist *= 0.72f;
     float maxPropDistSq = maxDist * maxDist;
 
+    auto tPropsStart = std::chrono::high_resolution_clock::now();
     for (const auto& prop : engine.getProps()) {
         float dx = prop.pos.x - cameraTarget_.x;
         float dz = prop.pos.z - cameraTarget_.z;
@@ -976,11 +987,12 @@ void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
             continue;
         }
         telemetry_.renderedEntities++;
+        int propLod = (dx * dx + dz * dz > 65.0f * 65.0f) ? 1 : 0;
         switch (prop.propType) {
             case 0:
             case 1:
             case 2:
-                models::drawDetailedTree3D(prop.pos, prop.scale, engine.getConfig().biome, waterAnimTime_);
+                models::drawDetailedTree3D(prop.pos, prop.scale, engine.getConfig().biome, waterAnimTime_, propLod);
                 break;
             case 3:
                 models::drawRockFormation3D(prop.pos, prop.scale, prop.rotation);
@@ -1005,7 +1017,10 @@ void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
                 break;
         }
     }
+    auto tPropsEnd = std::chrono::high_resolution_clock::now();
+    telemetry_.timePropsUs = std::chrono::duration<float, std::micro>(tPropsEnd - tPropsStart).count();
 
+    auto tBldgStart = std::chrono::high_resolution_clock::now();
     for (const auto& b : engine.getBuildings()) {
         if (!frustum_.containsSphere(b.pos, 16.0f)) {
             telemetry_.culledEntities++;
@@ -1014,7 +1029,10 @@ void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
         telemetry_.renderedEntities++;
         drawBuilding3D(b, engine);
     }
+    auto tBldgEnd = std::chrono::high_resolution_clock::now();
+    telemetry_.timeBuildingsUs = std::chrono::duration<float, std::micro>(tBldgEnd - tBldgStart).count();
 
+    auto tRegStart = std::chrono::high_resolution_clock::now();
     for (const auto& r : engine.getRegiments()) {
         if (!frustum_.containsSphere(r.pos, 10.0f)) {
             telemetry_.culledEntities++;
@@ -1023,6 +1041,8 @@ void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
         telemetry_.renderedEntities++;
         drawRegiment3D(r, engine);
     }
+    auto tRegEnd = std::chrono::high_resolution_clock::now();
+    telemetry_.timeRegimentsUs = std::chrono::duration<float, std::micro>(tRegEnd - tRegStart).count();
 
     // Smoldering, scorched vehicle hulks with ember glow
     for (const auto& w : engine.getWrecks()) {
@@ -1041,8 +1061,11 @@ void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
         EndShaderMode();
     }
 
+    auto tPartStart = std::chrono::high_resolution_clock::now();
     drawProjectilesAndParticles3D(engine);
     drawWeatherEffects3D(engine);
+    auto tPartEnd = std::chrono::high_resolution_clock::now();
+    telemetry_.timeParticlesUs = std::chrono::duration<float, std::micro>(tPartEnd - tPartStart).count();
 
     if (engine.pendingBuildType() >= 0) {
         Vector3 hit = screenToGround(GetMousePosition(), engine);
@@ -1214,9 +1237,12 @@ void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
 
     EndMode3D();
 
+    auto tPlatesStart = std::chrono::high_resolution_clock::now();
     if (!engine.isRevealAllShowcase()) {
         drawUnitWorldBarsAndLabels(engine);
     }
+    auto tPlatesEnd = std::chrono::high_resolution_clock::now();
+    telemetry_.timeOverheadPlatesUs = std::chrono::duration<float, std::micro>(tPlatesEnd - tPlatesStart).count();
 
     if (isDraggingSelect_) {
         float x = std::min(dragStartScreen_.x, dragCurrentScreen_.x);
@@ -1330,8 +1356,14 @@ void RTSRenderer::drawTerrainAndWater(const RTSEngine& engine) {
 void RTSRenderer::updateFogTexture(const RTSEngine& engine) {
     if (fogTexture_.id == 0) return;
 
-    alignas(32) static Color pixels[RTSEngine::kFogGridSize * RTSEngine::kFogGridSize];
     bool revealAll = engine.isRevealAllShowcase() || engine.getPlayer(0).radarRevealTimer > 0.0f;
+    if (lastUploadedFogVersion_ == engine.getFogVersion() && lastRevealAll_ == revealAll) {
+        return; // Fog has not changed; skip redundant GPU texture upload
+    }
+    lastUploadedFogVersion_ = engine.getFogVersion();
+    lastRevealAll_ = revealAll;
+
+    alignas(32) static Color pixels[RTSEngine::kFogGridSize * RTSEngine::kFogGridSize];
 
     for (int gz = 0; gz < RTSEngine::kFogGridSize; ++gz) {
         for (int gx = 0; gx < RTSEngine::kFogGridSize; ++gx) {
@@ -1426,6 +1458,16 @@ void RTSRenderer::drawRegiment3D(const RTSRegiment& r, const RTSEngine& engine) 
         return;
     }
 
+    float distToCam = Vector3Distance(r.pos, camera_.position);
+    int lod = 0;
+    if (quality_ == GraphicQuality::LOW) {
+        lod = (distToCam >= 42.0f) ? 2 : 1;
+    } else if (quality_ == GraphicQuality::MEDIUM) {
+        lod = (distToCam >= 78.0f) ? 2 : ((distToCam >= 40.0f) ? 1 : 0);
+    } else {
+        lod = (distToCam >= 85.0f) ? 2 : ((distToCam >= 45.0f) ? 1 : 0);
+    }
+
     const auto& gd = GameData::instance();
     const auto& nat = gd.getNation(r.nation);
     const auto& rDef = gd.getRegiment(r.type);
@@ -1465,27 +1507,30 @@ void RTSRenderer::drawRegiment3D(const RTSRegiment& r, const RTSEngine& engine) 
     }
 
     // 3D Entrenchment Sandbag Revetments (+35% Defense Fortification Visual)
-    if (r.stance == FormationStance::ENTRENCHED) {
+    if (r.stance == FormationStance::ENTRENCHED && lod < 2) {
         Color sandbagCol = {186, 168, 128, 255};
         Color sandbagDark = {142, 126, 92, 255};
         float rad = r.facing * DEG2RAD;
-        for (int a = -3; a <= 3; ++a) {
-            float ang = rad + a * 0.32f;
+        int bagCount = (lod == 0) ? 3 : 2;
+        for (int a = -bagCount; a <= bagCount; ++a) {
+            float ang = rad + a * 0.35f;
             float dist = 4.4f;
             Vector3 sPos = {r.pos.x + std::sin(ang) * dist, r.pos.y + 0.35f, r.pos.z + std::cos(ang) * dist};
             DrawCube(sPos, 1.25f, 0.65f, 0.75f, sandbagCol);
-            DrawCubeWires(sPos, 1.28f, 0.68f, 0.78f, sandbagDark);
+            if (lod == 0) {
+                DrawCubeWires(sPos, 1.28f, 0.68f, 0.78f, sandbagDark);
+            }
         }
     }
 
-    if (r.atTownHealingStation && r.health < r.maxHealth) {
+    if (r.atTownHealingStation && r.health < r.maxHealth && lod < 2) {
         float pulse = std::sin(waterAnimTime_ * 5.0f) * 0.25f;
         Vector3 mPos = {r.pos.x, r.pos.y + 4.2f + pulse, r.pos.z};
         DrawCube(mPos, 0.28f, 1.20f, 0.28f, {85, 255, 120, 230});
         DrawCube(mPos, 1.20f, 0.28f, 0.28f, {85, 255, 120, 230});
     }
 
-    models::drawDetailedRegiment3D(r, nat, rDef, waterAnimTime_);
+    models::drawDetailedRegiment3D(r, nat, rDef, waterAnimTime_, lod);
     (void)engine;
 }
 
@@ -1595,7 +1640,11 @@ void RTSRenderer::drawProjectilesAndParticles3D(const RTSEngine& engine) {
         if (!frustum_.containsSphere(pt.pos, pt.size * 2.5f + 1.0f)) continue;
         float lifeRatio = std::clamp(pt.life / std::max(0.01f, pt.maxLife), 0.0f, 1.0f);
         if (pt.isCasing) {
-            float gh = engine.getTerrainHeight(pt.pos.x, pt.pos.z) + 0.05f;
+            float dx = pt.pos.x - camera_.position.x;
+            float dz = pt.pos.z - camera_.position.z;
+            if (dx * dx + dz * dz > 46.0f * 46.0f) continue; // Distance cull sub-pixel casings at >46m
+
+            float gh = pt.pos.y + 0.05f;
             DrawCircle3D({pt.pos.x, gh - 0.02f, pt.pos.z}, pt.size * 0.9f, {1, 0, 0}, 90.0f, ColorAlpha(BLACK, 0.35f * lifeRatio));
             rlPushMatrix();
             rlTranslatef(pt.pos.x, gh, pt.pos.z);
@@ -1603,11 +1652,11 @@ void RTSRenderer::drawProjectilesAndParticles3D(const RTSEngine& engine) {
             DrawCylinderEx({-pt.size * 1.2f, 0.0f, 0.0f}, {pt.size * 1.2f, 0.0f, 0.0f}, pt.size * 0.32f, pt.size * 0.32f, 6, ColorAlpha(GOLD, lifeRatio));
             rlPopMatrix();
         } else if (pt.isTread) {
-            float gh = engine.getTerrainHeight(pt.pos.x, pt.pos.z) + 0.03f;
+            float gh = pt.pos.y + 0.03f;
             unsigned char a = static_cast<unsigned char>(lifeRatio * 52.0f);
             DrawCircle3D({pt.pos.x, gh, pt.pos.z}, pt.size, {1.0f, 0.0f, 0.0f}, 90.0f, Color{38, 34, 28, a});
         } else if (pt.isCrater) {
-            float gh = engine.getTerrainHeight(pt.pos.x, pt.pos.z) + 0.08f;
+            float gh = pt.pos.y + 0.08f;
             unsigned char aOuter = static_cast<unsigned char>(lifeRatio * 155.0f);
             unsigned char aInner = static_cast<unsigned char>(lifeRatio * 215.0f);
             DrawCircle3D({pt.pos.x, gh, pt.pos.z}, pt.size, {1.0f, 0.0f, 0.0f}, 90.0f, Color{36, 32, 28, aOuter});

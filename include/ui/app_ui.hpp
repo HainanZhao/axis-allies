@@ -24,6 +24,7 @@ public:
     // Automated Self-Test Suite (verifies all 3D RTS systems, Supply, Formations, Save/Load)
     bool runSelfTestSuite();
     void capturePreviewScreenshots(const std::string& outDir);
+    void runProfilingBenchmark();
 
 private:
     void renderMainMenu();

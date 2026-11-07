@@ -10,6 +10,7 @@
 #include "ui/ui_theme.hpp"
 #include <cstdio>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 
 namespace aa2004 {
@@ -2421,6 +2422,206 @@ void AxisAlliesApp::capturePreviewScreenshots(const std::string& outDir) {
     for (auto& r : rtsEngine_.getRegimentsMut()) r.selected = false;
     for (int i = 0; i < 4; ++i) updateAndDrawFrame();
     TakeScreenshot((outDir + "/preview_airfield_hud.png").c_str());
+}
+
+void AxisAlliesApp::runProfilingBenchmark() {
+    std::cout << "================================================================\n";
+    std::cout << "AXIS & ALLIES (2004) -- CPU/GPU HIGH-LOAD PROFILING BENCHMARK\n";
+    std::cout << "================================================================\n";
+
+    // 1. Setup a massive 4-faction Allied 2v2 / FFA battle on Kursk Steppe
+    RTSBattleConfig cfg{};
+    cfg.playerNation = NationId::USA;
+    cfg.playerGeneralIdx = 0;
+    cfg.enemyNation = NationId::GER;
+    cfg.enemyGeneralIdx = 0;
+    cfg.extraNations = {NationId::UK, NationId::JPN};
+    cfg.extraGeneralIdxs = {0, 0};
+    cfg.numPlayers = 4;
+    cfg.gameMode = BattleGameMode::ALLIED_2V2;
+    cfg.biome = BiomeType::KURSK_STEPPE;
+    cfg.scenarioTitle = "Kursk Massive Clash Profiling Scenario";
+    cfg.objectiveDesc = "High-density regiment combat benchmarking";
+    cfg.startingMoney = 5000;
+    cfg.startingAmmo = 5000;
+    cfg.startingOil = 5000;
+    cfg.aiDifficulty = 2; // Hard AI for active decisions
+
+    rtsEngine_.startBattle(cfg, &sound_);
+    rtsRenderer_.initForBattle(rtsEngine_);
+    rtsRenderer_.setCameraFocus({0.0f, 0.0f, 0.0f}, 92.0f, 0.0f, 0.62f);
+
+    // 2. Spawn 120 regiments across 4 factions in active combat confrontation
+    std::cout << "[BENCHMARK] Spawning 120 combat regiments across 4 factions in central sector...\n";
+    const RegimentType testTypes[] = {
+        RegimentType::RIFLE_REGIMENT,
+        RegimentType::MG_REGIMENT,
+        RegimentType::MEDIUM_TANK,
+        RegimentType::TANK_DESTROYER,
+        RegimentType::MOBILE_ARTILLERY,
+        RegimentType::HEAVY_TANK
+    };
+
+    for (int team = 0; team < 4; ++team) {
+        float baseZ = (team == 0) ? 140.0f : ((team == 1) ? 100.0f : ((team == 2) ? -100.0f : -140.0f));
+        float targetZ = (team < 2) ? -60.0f : 60.0f;
+        for (int i = 0; i < 30; ++i) {
+            float x = -135.0f + (i % 10) * 30.0f + ((team % 2) * 8.0f);
+            float z = baseZ + (i / 10) * 18.0f;
+            RegimentType rt = testTypes[i % 6];
+            int regId = rtsEngine_.spawnRegiment(team, rt, {x, 0.0f, z});
+            // Assign attack-move order towards opposite sector
+            for (auto& r : rtsEngine_.getRegimentsMut()) {
+                if (r.id == regId) {
+                    r.targetPos = {x, 0.0f, targetZ};
+                    r.attackMove = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Spawn support air strikes and artillery fire
+    rtsEngine_.launchAirReconMission(0, {0.0f, 0.0f, 0.0f});
+    rtsEngine_.launchAirBombingMission(2, {20.0f, 0.0f, 20.0f});
+
+    std::cout << "[BENCHMARK] Initialized with: "
+              << rtsEngine_.getRegiments().size() << " regiments, "
+              << rtsEngine_.getBuildings().size() << " buildings, "
+              << rtsEngine_.getProps().size() << " props.\n";
+
+    // 3. Warm-up frames
+    for (int w = 0; w < 10; ++w) {
+        rtsEngine_.update(0.016f);
+        BeginDrawing();
+        ClearBackground(BLACK);
+        rtsRenderer_.render3DBattlefield(rtsEngine_);
+        bool ret = false, fin = false;
+        rtsRenderer_.renderTacticalHUD(rtsEngine_, sound_, ret, fin);
+        EndDrawing();
+    }
+
+    // 4. Benchmark 240 frames with high-resolution microsecond timer
+    const int kBenchFrames = 240;
+    std::cout << "[BENCHMARK] Executing " << kBenchFrames << " profiling frames under active combat...\n";
+
+    double totalSimUs = 0.0;
+    double totalRender3DUs = 0.0;
+    double totalHudUs = 0.0;
+    double totalGpuFlushUs = 0.0;
+    double totalFrameUs = 0.0;
+
+    double totalFogUs = 0.0;
+    double totalTerrainUs = 0.0;
+    double totalPropsUs = 0.0;
+    double totalBuildingsUs = 0.0;
+    double totalRegimentsUs = 0.0;
+    double totalParticlesUs = 0.0;
+    double totalOverheadPlatesUs = 0.0;
+
+    int totalCulled = 0;
+    int totalRendered = 0;
+
+    for (int f = 0; f < kBenchFrames; ++f) {
+        auto tStart = std::chrono::high_resolution_clock::now();
+
+        // Simulation Step
+        auto tSimStart = std::chrono::high_resolution_clock::now();
+        rtsEngine_.update(0.01666f);
+        auto tSimEnd = std::chrono::high_resolution_clock::now();
+
+        // Render Step
+        BeginDrawing();
+        ClearBackground(BLACK);
+
+        auto t3DStart = std::chrono::high_resolution_clock::now();
+        rtsRenderer_.render3DBattlefield(rtsEngine_);
+        auto t3DEnd = std::chrono::high_resolution_clock::now();
+
+        auto tHudStart = std::chrono::high_resolution_clock::now();
+        bool ret = false, fin = false;
+        rtsRenderer_.renderTacticalHUD(rtsEngine_, sound_, ret, fin);
+        auto tHudEnd = std::chrono::high_resolution_clock::now();
+
+        auto tFlushStart = std::chrono::high_resolution_clock::now();
+        EndDrawing();
+        auto tFlushEnd = std::chrono::high_resolution_clock::now();
+
+        auto tFrameEnd = std::chrono::high_resolution_clock::now();
+
+        totalSimUs += std::chrono::duration<double, std::micro>(tSimEnd - tSimStart).count();
+        totalRender3DUs += std::chrono::duration<double, std::micro>(t3DEnd - t3DStart).count();
+        totalHudUs += std::chrono::duration<double, std::micro>(tHudEnd - tHudStart).count();
+        totalGpuFlushUs += std::chrono::duration<double, std::micro>(tFlushEnd - tFlushStart).count();
+        totalFrameUs += std::chrono::duration<double, std::micro>(tFrameEnd - tStart).count();
+
+        const auto& tel = rtsRenderer_.getTelemetry();
+        totalCulled += tel.culledEntities;
+        totalRendered += tel.renderedEntities;
+        totalFogUs += tel.timeFogTexUs;
+        totalTerrainUs += tel.timeTerrainUs;
+        totalPropsUs += tel.timePropsUs;
+        totalBuildingsUs += tel.timeBuildingsUs;
+        totalRegimentsUs += tel.timeRegimentsUs;
+        totalParticlesUs += tel.timeParticlesUs;
+        totalOverheadPlatesUs += tel.timeOverheadPlatesUs;
+    }
+
+    double avgSimUs = totalSimUs / kBenchFrames;
+    double avgRender3DUs = totalRender3DUs / kBenchFrames;
+    double avgHudUs = totalHudUs / kBenchFrames;
+    double avgFlushUs = totalGpuFlushUs / kBenchFrames;
+    double avgFrameUs = totalFrameUs / kBenchFrames;
+    double avgFps = (avgFrameUs > 0.0) ? (1000000.0 / avgFrameUs) : 0.0;
+
+    std::cout << "\n================================================================\n";
+    std::cout << "                  PROFILING BENCHMARK REPORT                     \n";
+    std::cout << "================================================================\n";
+    std::cout << "  Active Units on Field:     " << rtsEngine_.getRegiments().size() << " regiments\n";
+    std::cout << "  Active Projectiles:        " << rtsEngine_.getProjectiles().size() << "\n";
+    std::cout << "  Active Particles/Casings:  " << rtsEngine_.getParticles().size() << "\n";
+    std::cout << "  Active Scorched Wrecks:    " << rtsEngine_.getWrecks().size() << "\n";
+    std::cout << "  3D Visible/Culled Ratio:   " << (totalRendered / kBenchFrames) << " drawn / "
+              << (totalCulled / kBenchFrames) << " culled per frame\n";
+    std::cout << "----------------------------------------------------------------\n";
+    std::cout << "  Total Average Frame Time:  " << (avgFrameUs / 1000.0) << " ms  ("
+              << static_cast<int>(avgFrameUs) << " us) -> " << static_cast<int>(avgFps) << " FPS\n";
+    std::cout << "----------------------------------------------------------------\n";
+    std::cout << "  Subsystem Breakdown:\n";
+    std::cout << "    1. RTSEngine::update (Simulation):     "
+              << std::setw(6) << static_cast<int>(avgSimUs) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * avgSimUs / avgFrameUs) << "%)\n";
+    std::cout << "    2. 3D Battlefield Rendering:           "
+              << std::setw(6) << static_cast<int>(avgRender3DUs) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * avgRender3DUs / avgFrameUs) << "%)\n";
+    std::cout << "       - 3D Unit Regiments & Subunits:     "
+              << std::setw(6) << static_cast<int>(totalRegimentsUs / kBenchFrames) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * (totalRegimentsUs / kBenchFrames) / avgFrameUs) << "%)\n";
+    std::cout << "       - 3D Props (Trees/Rocks/Hedgerows): "
+              << std::setw(6) << static_cast<int>(totalPropsUs / kBenchFrames) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * (totalPropsUs / kBenchFrames) / avgFrameUs) << "%)\n";
+    std::cout << "       - 3D Buildings & HQs:               "
+              << std::setw(6) << static_cast<int>(totalBuildingsUs / kBenchFrames) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * (totalBuildingsUs / kBenchFrames) / avgFrameUs) << "%)\n";
+    std::cout << "       - Particles & Casings & Weather:    "
+              << std::setw(6) << static_cast<int>(totalParticlesUs / kBenchFrames) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * (totalParticlesUs / kBenchFrames) / avgFrameUs) << "%)\n";
+    std::cout << "       - Overhead NATO Plates & 2D Bars:   "
+              << std::setw(6) << static_cast<int>(totalOverheadPlatesUs / kBenchFrames) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * (totalOverheadPlatesUs / kBenchFrames) / avgFrameUs) << "%)\n";
+    std::cout << "       - Terrain & Water Meshes:           "
+              << std::setw(6) << static_cast<int>(totalTerrainUs / kBenchFrames) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * (totalTerrainUs / kBenchFrames) / avgFrameUs) << "%)\n";
+    std::cout << "       - Fog of War Dynamic Texture:       "
+              << std::setw(6) << static_cast<int>(totalFogUs / kBenchFrames) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * (totalFogUs / kBenchFrames) / avgFrameUs) << "%)\n";
+    std::cout << "    3. Tactical HUD & Command Bar UI:      "
+              << std::setw(6) << static_cast<int>(avgHudUs) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * avgHudUs / avgFrameUs) << "%)\n";
+    std::cout << "    4. Raylib / OpenGL GPU Buffer Flush:   "
+              << std::setw(6) << static_cast<int>(avgFlushUs) << " us  ("
+              << std::fixed << std::setprecision(1) << (100.0 * avgFlushUs / avgFrameUs) << "%)\n";
+    std::cout << "================================================================\n\n";
 }
 
 } // namespace aa2004
