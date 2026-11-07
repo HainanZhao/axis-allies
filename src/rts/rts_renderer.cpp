@@ -590,6 +590,9 @@ void RTSRenderer::updateCameraAndInput(RTSEngine& engine, SoundEngine& sound, fl
         engine.setSelectedFormationStance(FormationStance::LINE);
         sound.playSfx(SfxId::UI_CLICK, 0.55f);
     }
+    if (IsKeyPressed(KEY_Y)) {
+        engine.issueAlliedPingOrder(screenToGround(mouse, engine));
+    }
     if (IsKeyPressed(KEY_V)) {
         engine.setSelectedFormationStance(FormationStance::COLUMN);
         sound.playSfx(SfxId::UI_CLICK, 0.55f);
@@ -1195,6 +1198,17 @@ void RTSRenderer::render3DBattlefield(const RTSEngine& engine) {
                          0.25f, 0.25f, 14.0f, 6, Color{100, 255, 140, 240});
             DrawSphere({moveOrderIndicatorPos_.x, moveOrderIndicatorPos_.y + 14.0f, moveOrderIndicatorPos_.z}, 1.0f, GOLD);
         }
+        rlEnableDepthTest();
+    }
+
+    if (engine.getAlliedPingTimer() > 0.0f) {
+        Vector3 pPos = engine.getAlliedPingPos();
+        float pulse = std::fmod(waterAnimTime_ * 10.0f, 16.0f) + 4.0f;
+        rlDisableDepthTest();
+        DrawCircle3D({pPos.x, pPos.y + 0.4f, pPos.z}, pulse, {1, 0, 0}, 90.0f, SKYBLUE);
+        DrawCircle3D({pPos.x, pPos.y + 0.45f, pPos.z}, 3.5f, {1, 0, 0}, 90.0f, GOLD);
+        DrawCylinder({pPos.x, pPos.y + 9.0f, pPos.z}, 0.35f, 0.35f, 18.0f, 6, SKYBLUE);
+        DrawSphere({pPos.x, pPos.y + 18.0f, pPos.z}, 1.2f, GOLD);
         rlEnableDepthTest();
     }
 
@@ -1825,13 +1839,14 @@ void RTSRenderer::drawUnitWorldBarsAndLabels(const RTSEngine& engine) {
 
         bool isPlayer = (r.teamId == 0);
         bool isAlly = (!isPlayer && engine.isAllied(0, r.teamId));
+        bool is2v2 = (engine.getConfig().gameMode == BattleGameMode::ALLIED_2V2);
         bool isE1 = (!isPlayer && !isAlly && r.teamId == 1);
-        bool isE2 = (!isPlayer && !isAlly && r.teamId == 2);
-        bool isE3 = (!isPlayer && !isAlly && r.teamId >= 3);
+        bool isE2 = (!isPlayer && !isAlly && (is2v2 ? (r.teamId == 3) : (r.teamId == 2)));
+        bool isE3 = (!isPlayer && !isAlly && !is2v2 && r.teamId >= 3);
 
         Color factionCol = isPlayer ? LIME :
                           (isAlly ? SKYBLUE :
-                          (isE2 ? Color{245, 155, 45, 255} :
+                          (isE2 ? (is2v2 ? Color{245, 95, 75, 255} : Color{245, 155, 45, 255}) :
                           (isE3 ? Color{195, 110, 245, 255} : Color{230, 65, 65, 255})));
 
         // Sleek NATO/Tactical Unit Plate (Class badge + dual HP/Org bars + Control Group badge)
@@ -1863,8 +1878,10 @@ void RTSRenderer::drawUnitWorldBarsAndLabels(const RTSEngine& engine) {
             ui.drawText("E1", eBox.x + 2.5f, eBox.y + 1.0f, 10.0f, Color{255, 160, 160, 255}, true, false);
         } else if (isE2) {
             Rectangle eBox = {plate.x - 18.0f, plate.y, 17.0f, 13.0f};
-            DrawRectangleRec(eBox, {54, 38, 16, 235});
-            DrawRectangleLinesEx(eBox, 1.0f, Color{245, 155, 45, 255});
+            Color e2Border = is2v2 ? Color{245, 95, 75, 255} : Color{245, 155, 45, 255};
+            Color e2Fill   = is2v2 ? Color{58, 22, 20, 235} : Color{54, 38, 16, 235};
+            DrawRectangleRec(eBox, e2Fill);
+            DrawRectangleLinesEx(eBox, 1.0f, e2Border);
             ui.drawText("E2", eBox.x + 2.5f, eBox.y + 1.0f, 10.0f, Color{255, 200, 140, 255}, true, false);
         } else if (isE3) {
             Rectangle eBox = {plate.x - 18.0f, plate.y, 17.0f, 13.0f};
@@ -1948,12 +1965,15 @@ void RTSRenderer::renderTacticalHUD(RTSEngine& engine, SoundEngine& sound, bool&
     ui.drawText(gen.name.c_str(), 44.0f, 22.0f, 11.0f, nat.accentColor, false);
 
     // 3-Resource Economy + Army Experience (Command Points) + Non-linear Town & Oil Synergies
+    bool is2v2Mode = (engine.getConfig().gameMode == BattleGameMode::ALLIED_2V2);
     ui.drawText(TextFormat("$%.0f (+%.0f/s)", p0.money, p0.moneyRate), 210.0f, 7.0f, 13.0f, {255, 222, 95, 255}, true);
     if (p0.controlledTowns > 1) {
-        ui.drawText(TextFormat("%d Towns (+%.0f%% Synergy)", p0.controlledTowns, (p0.townSynergyMult - 1.0f) * 100.0f),
+        ui.drawText(TextFormat(is2v2Mode ? "%d Coalition Towns (+%.0f%%)" : "%d Towns (+%.0f%% Synergy)",
+                               p0.controlledTowns, (p0.townSynergyMult - 1.0f) * 100.0f),
                     210.0f, 23.0f, 10.0f, {225, 215, 160, 235}, false);
     } else {
-        ui.drawText(TextFormat("%d Town (Base Yield)", p0.controlledTowns), 210.0f, 23.0f, 10.0f, {185, 180, 165, 210}, false);
+        ui.drawText(TextFormat(is2v2Mode ? "%d Coalition Town (Base)" : "%d Town (Base Yield)", p0.controlledTowns),
+                    210.0f, 23.0f, 10.0f, {185, 180, 165, 210}, false);
     }
 
     ui.drawText(TextFormat("AMMO: %.0f (+%.0f)", p0.ammo, p0.ammoRate), 376.0f, 7.0f, 13.0f, {255, 182, 75, 255}, true);
@@ -2045,6 +2065,62 @@ void RTSRenderer::renderTacticalHUD(RTSEngine& engine, SoundEngine& sound, bool&
         DrawRectangleRec(bBox, {18, 26, 20, 240});
         DrawRectangleLinesEx(bBox, 1.8f, GOLD);
         ui.drawTextCentered(bannerMsg, bBox, 14.0f, GOLD, true);
+    }
+
+    // 2v2 Allied Coalition Status Widget & Tactical Coordination Panel
+    int allyTeamId = engine.getAlliedTeamId();
+    if (allyTeamId > 0 && engine.getConfig().gameMode == BattleGameMode::ALLIED_2V2) {
+        const auto& aPlayer = engine.getPlayer(allyTeamId);
+        const auto& aNat = gd.getNation(aPlayer.nation);
+        const auto& aGen = gd.getGeneral(aPlayer.nation, aPlayer.generalIdx);
+
+        float aHqPct = 0.0f;
+        bool aHqAlive = false;
+        bool aHqUnderAttack = false;
+        for (const auto& b : engine.getBuildings()) {
+            if (b.teamId == allyTeamId && b.type == BuildingType::CORPS_HQ && b.health > 0.0f) {
+                aHqAlive = true;
+                aHqPct = std::clamp(b.health / b.maxHealth, 0.0f, 1.0f);
+                if (b.combatTimer > 0.0f) aHqUnderAttack = true;
+                break;
+            }
+        }
+
+        int aRegCount = 0;
+        for (const auto& r : engine.getRegiments()) {
+            if (r.teamId == allyTeamId && r.health > 0.0f) ++aRegCount;
+        }
+
+        Rectangle aCard = {10.0f, 52.0f, 252.0f, 62.0f};
+        DrawRectangleRec(aCard, Color{14, 22, 20, 235});
+        DrawRectangleLinesEx(aCard, 1.2f, aHqUnderAttack ? RED : SKYBLUE);
+
+        const Texture2D& aFlag = ui.getNationFlag(aPlayer.nation);
+        if (aFlag.id != 0) {
+            DrawTexturePro(aFlag, {0, 0, (float)aFlag.width, (float)aFlag.height},
+                           {aCard.x + 8.0f, aCard.y + 8.0f, 22.0f, 15.0f}, {0, 0}, 0.0f, WHITE);
+        }
+        ui.drawText(TextFormat("[ALLY] %s -- %s", aNat.shortName.c_str(), aGen.name.c_str()),
+                    aCard.x + 36.0f, aCard.y + 8.0f, 11.0f, SKYBLUE, true);
+
+        // HQ integrity bar
+        DrawRectangle(static_cast<int>(aCard.x + 36.0f), static_cast<int>(aCard.y + 24.0f), 120, 6, Color{35, 45, 40, 255});
+        DrawRectangle(static_cast<int>(aCard.x + 36.0f), static_cast<int>(aCard.y + 24.0f), static_cast<int>(120.0f * aHqPct), 6,
+                      aHqUnderAttack ? RED : (aHqAlive ? LIME : GRAY));
+        ui.drawText(aHqAlive ? TextFormat("HQ: %.0f%%", aHqPct * 100.0f) : "HQ: DESTROYED",
+                    aCard.x + 162.0f, aCard.y + 22.0f, 10.0f, aHqUnderAttack ? RED : (aHqAlive ? LIME : GRAY), true);
+
+        // Status & Ping button
+        const char* statusTxt = (engine.getAlliedPingTimer() > 0.0f) ? "COORDINATED ATTACK ACTIVE" :
+                                (aHqUnderAttack ? "MAYDAY: DEFENDING HQ" :
+                                (aRegCount >= 4 ? "ASSAULT SQUAD ENGAGED" : "EXPANDING & CONTESTING"));
+        Color statCol = (engine.getAlliedPingTimer() > 0.0f) ? GOLD : (aHqUnderAttack ? RED : (aRegCount >= 4 ? LIME : SKYBLUE));
+        ui.drawText(TextFormat("%s  (%d Regs)", statusTxt, aRegCount), aCard.x + 8.0f, aCard.y + 42.0f, 9.5f, statCol, false);
+
+        Rectangle pingBtn = {aCard.x + aCard.width - 76.0f, aCard.y + 36.0f, 70.0f, 20.0f};
+        if (DrawHUDButton(pingBtn, "[Y] PING", Color{32, 48, 56, 255}, GOLD, 10, engine.getAlliedPingTimer() > 0.0f)) {
+            engine.issueAlliedPingOrder(cameraTarget_);
+        }
     }
 
     // Count HQs, Cities, Regiments, and Control Groups
@@ -2943,9 +3019,10 @@ void RTSRenderer::renderTacticalHUD(RTSEngine& engine, SoundEngine& sound, bool&
         ui.drawText("   * Left-Click a soldier/tank or Left-Drag a Green Box to select army units. Press [SPACE] to pan to battle alert!", hx, hy, 12.0f, RAYWHITE, false); hy += 15.0f;
         ui.drawText("   * Left-Clicking on empty ground DESELECTS. Left-Click NEVER moves or attacks!", hx, hy, 12.0f, LIME, true); hy += 20.0f;
 
-        ui.drawText("2. MOVE & TARGET (RIGHT-CLICK):", hx, hy, 14.0f, GOLD, true); hy += 18.0f;
+        ui.drawText("2. MOVE & TARGET (RIGHT-CLICK) & 2v2 ALLIED CO-OP PING:", hx, hy, 14.0f, GOLD, true); hy += 18.0f;
         ui.drawText("   * RIGHT-CLICK ground to move in formation (or press [M] for Attack-Move).", hx, hy, 12.0f, RAYWHITE, false); hy += 15.0f;
-        ui.drawText("   * RIGHT-CLICK enemy regiment or structure to TARGET & FOCUS FIRE (shows red target reticle).", hx, hy, 12.0f, LIME, true); hy += 20.0f;
+        ui.drawText("   * RIGHT-CLICK enemy regiment or structure to TARGET & FOCUS FIRE (shows red target reticle).", hx, hy, 12.0f, LIME, true); hy += 15.0f;
+        ui.drawText("   * Press [Y] or click Allied Card to order AI Ally to focus-attack or defend designated sector!", hx, hy, 12.0f, SKYBLUE, true); hy += 20.0f;
 
         ui.drawText("3. FORMATIONS, DYNAMIC COVER & ABILITIES:", hx, hy, 14.0f, GOLD, true); hy += 18.0f;
         ui.drawText("   * Formations: [Z] Line (standard), [V] Road Column (+25% Speed), [C] Entrench (+35% Defense).", hx, hy, 12.0f, RAYWHITE, false); hy += 15.0f;
@@ -3112,9 +3189,10 @@ void RTSRenderer::drawMinimap(RTSEngine& engine, Rectangle rect) {
         Color bc = (b.teamId == 0) ? LIME :
                    (engine.isAllied(0, b.teamId) ? SKYBLUE :
                    (b.teamId == 1 ? RED :
+                   (engine.getConfig().gameMode == BattleGameMode::ALLIED_2V2 ? Color{245, 95, 75, 255} :
                    (b.teamId == 2 ? Color{245, 155, 45, 255} :
                    (b.teamId >= 3 ? Color{195, 110, 245, 255} :
-                   (engine.isPosExploredByPlayer(b.pos) ? GOLD : Color{125, 115, 65, 135})))));
+                   (engine.isPosExploredByPlayer(b.pos) ? GOLD : Color{125, 115, 65, 135}))))));
         DrawRectangle(static_cast<int>(mp.x - 3), static_cast<int>(mp.y - 3), 6, 6, bc);
 
         // Contested town expanding animated radar ping
@@ -3141,7 +3219,8 @@ void RTSRenderer::drawMinimap(RTSEngine& engine, Rectangle rect) {
         Color rc = (r.teamId == 0) ? (r.selected ? WHITE : LIME) :
                    (engine.isAllied(0, r.teamId) ? SKYBLUE :
                    (r.teamId == 1 ? RED :
-                   (r.teamId == 2 ? Color{245, 155, 45, 255} : Color{195, 110, 245, 255})));
+                   (engine.getConfig().gameMode == BattleGameMode::ALLIED_2V2 ? Color{245, 95, 75, 255} :
+                   (r.teamId == 2 ? Color{245, 155, 45, 255} : Color{195, 110, 245, 255}))));
         DrawCircle(static_cast<int>(mp.x), static_cast<int>(mp.y), 2.5f, rc);
     }
 
@@ -3162,6 +3241,13 @@ void RTSRenderer::drawMinimap(RTSEngine& engine, Rectangle rect) {
         Vector2 omp = toMini(moveOrderIndicatorPos_);
         DrawCircle(static_cast<int>(omp.x), static_cast<int>(omp.y), 3.5f, moveOrderIndicatorIsAttack_ ? RED : LIME);
         DrawCircleLines(static_cast<int>(omp.x), static_cast<int>(omp.y), 5.0f, GOLD);
+    }
+
+    if (engine.getAlliedPingTimer() > 0.0f) {
+        Vector2 amp = toMini(engine.getAlliedPingPos());
+        float pPulse = std::fmod(waterAnimTime_ * 12.0f, 14.0f) + 4.0f;
+        DrawCircleLines(static_cast<int>(amp.x), static_cast<int>(amp.y), pPulse, SKYBLUE);
+        DrawCircle(static_cast<int>(amp.x), static_cast<int>(amp.y), 4.0f, GOLD);
     }
 
     // 5. True Rotated Camera Perspective Frustum on Minimap

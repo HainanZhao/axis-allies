@@ -562,37 +562,6 @@ void AxisAlliesApp::renderCampaignSelectScreen() {
     }
 }
 
-static inline std::pair<NationId, NationId> get2v2ExtraNations(NationId playerNation, NationId enemyNation) {
-    bool pIsAxis = (playerNation == NationId::GER || playerNation == NationId::JPN);
-    NationId allyNation = NationId::UK;
-    if (pIsAxis) {
-        allyNation = (playerNation == NationId::GER) ? NationId::JPN : NationId::GER;
-    } else {
-        if (playerNation == NationId::USA) {
-            allyNation = (enemyNation == NationId::UK) ? NationId::USSR : NationId::UK;
-        } else if (playerNation == NationId::UK) {
-            allyNation = (enemyNation == NationId::USA) ? NationId::USSR : NationId::USA;
-        } else {
-            allyNation = (enemyNation == NationId::USA) ? NationId::UK : NationId::USA;
-        }
-    }
-
-    bool eIsAxis = (enemyNation == NationId::GER || enemyNation == NationId::JPN);
-    NationId enemy2Nation = NationId::JPN;
-    if (eIsAxis) {
-        enemy2Nation = (enemyNation == NationId::GER) ? NationId::JPN : NationId::GER;
-    } else {
-        if (enemyNation == NationId::USA) {
-            enemy2Nation = (playerNation == NationId::UK) ? NationId::USSR : NationId::UK;
-        } else if (enemyNation == NationId::UK) {
-            enemy2Nation = (playerNation == NationId::USA) ? NationId::USSR : NationId::USA;
-        } else {
-            enemy2Nation = (playerNation == NationId::USA) ? NationId::UK : NationId::USA;
-        }
-    }
-    return { allyNation, enemy2Nation };
-}
-
 void AxisAlliesApp::renderSkirmishSetupScreen() {
     int sw = GetScreenWidth();
     int sh = GetScreenHeight();
@@ -798,39 +767,70 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
 
     // 1. Player Command (Upper Half)
     float py0 = topY + 34.0f;
-    ui.drawText("YOUR EXPEDITIONARY FORCE (PLAYER 1):", leftX + 14.0f, py0, 11.0f, LIME, true);
+    bool is2v2 = (selectedGameMode_ == 1);
+
+    NationId curAlliedNation = selectedNation_;
+    int curAlliedGenIdx = selectedGeneralIdx_;
+    if (is2v2) {
+        Rectangle tabYou = {leftX + 12.0f, py0 - 4.0f, 155.0f, 24.0f};
+        Rectangle tabAlly = {leftX + 172.0f, py0 - 4.0f, 165.0f, 24.0f};
+        if (drawOptionCard(tabYou, "[P1] YOU (COMMANDER)", "", selectedAlliedSlot_ == 0, LIME)) {
+            sound_.playSfx(SfxId::UI_CLICK);
+            selectedAlliedSlot_ = 0;
+        }
+        if (drawOptionCard(tabAlly, "[P2] ALLY (AI FORCE)", "", selectedAlliedSlot_ == 1, SKYBLUE)) {
+            sound_.playSfx(SfxId::UI_CLICK);
+            selectedAlliedSlot_ = 1;
+        }
+        if (selectedAlliedSlot_ == 1) {
+            curAlliedNation = allyNation_;
+            curAlliedGenIdx = allyGeneralIdx_;
+        }
+    } else {
+        ui.drawText("YOUR EXPEDITIONARY FORCE (PLAYER 1):", leftX + 14.0f, py0, 11.0f, LIME, true);
+    }
 
     // Player Nations
     for (int i = 0; i < 5; ++i) {
         NationId nid = nationOrder[i];
-        Rectangle nr = {leftX + 12.0f + i * (nBtnW + 3.0f), py0 + 18.0f, nBtnW, nBtnH};
-        if (drawNationChip(nr, nid, selectedNation_ == nid, false)) {
+        Rectangle nr = {leftX + 12.0f + i * (nBtnW + 3.0f), py0 + (is2v2 ? 26.0f : 18.0f), nBtnW, nBtnH};
+        if (drawNationChip(nr, nid, curAlliedNation == nid, false)) {
             sound_.playSfx(SfxId::UI_CLICK);
-            selectedNation_ = nid;
-            selectedGeneralIdx_ = 0;
+            if (is2v2 && selectedAlliedSlot_ == 1) {
+                allyNation_ = nid;
+                allyGeneralIdx_ = 0;
+            } else {
+                selectedNation_ = nid;
+                selectedGeneralIdx_ = 0;
+            }
         }
     }
 
     // Player Generals
-    const auto& pNat = gd.getNation(selectedNation_);
-    float pyGen = py0 + 18.0f + nBtnH + 10.0f;
+    const auto& pNat = gd.getNation(curAlliedNation);
+    float pyGen = py0 + (is2v2 ? 26.0f : 18.0f) + nBtnH + 10.0f;
     for (int g = 0; g < static_cast<int>(pNat.generals.size()); ++g) {
         Rectangle gr = {leftX + 12.0f + g * (gBtnW + 2.0f), pyGen, gBtnW, gBtnH};
-        if (drawCommanderChip(gr, pNat.generals[g].name.c_str(), selectedGeneralIdx_ == g, false)) {
+        if (drawCommanderChip(gr, pNat.generals[g].name.c_str(), curAlliedGenIdx == g, false)) {
             sound_.playSfx(SfxId::UI_CLICK);
-            selectedGeneralIdx_ = g;
+            if (is2v2 && selectedAlliedSlot_ == 1) {
+                allyGeneralIdx_ = g;
+            } else {
+                selectedGeneralIdx_ = g;
+            }
         }
     }
 
     // Player Doctrine Dossier Card
-    const auto& pGen = gd.getGeneral(selectedNation_, selectedGeneralIdx_);
+    const auto& pGen = gd.getGeneral(curAlliedNation, curAlliedGenIdx);
     float pyDoc = pyGen + gBtnH + 10.0f;
     float docH = 104.0f;
     Rectangle pDocRec = {leftX + 12.0f, pyDoc, leftW - 24.0f, docH};
     DrawRectangleRec(pDocRec, Color{12, 19, 15, 230});
     DrawRectangleLinesEx(pDocRec, 1.0f, Color{50, 85, 65, 180});
-    DrawRectangle(static_cast<int>(pDocRec.x), static_cast<int>(pDocRec.y), 3, static_cast<int>(pDocRec.height), LIME);
-    ui.drawText(TextFormat("ALLIED DOCTRINE : %s -- %s", pGen.name.c_str(), pGen.specialty.c_str()),
+    DrawRectangle(static_cast<int>(pDocRec.x), static_cast<int>(pDocRec.y), 3, static_cast<int>(pDocRec.height), (is2v2 && selectedAlliedSlot_ == 1) ? SKYBLUE : LIME);
+    const char* slotRole = (is2v2 && selectedAlliedSlot_ == 1) ? "COALITION ALLY (AI)" : "EXPEDITIONARY COMMANDER (YOU)";
+    ui.drawText(TextFormat("[%s] %s : %s -- %s", slotRole, pNat.shortName.c_str(), pGen.name.c_str(), pGen.specialty.c_str()),
                 pDocRec.x + 12.0f, pDocRec.y + 8.0f, 12.0f, GOLD, true);
     ui.drawText(TextFormat("Command Perk: %s", pGen.passiveDesc.c_str()),
                 pDocRec.x + 12.0f, pDocRec.y + 28.0f, 11.0f, Color{220, 245, 225, 245}, false);
@@ -846,38 +846,67 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
 
     // 2. Enemy Command (Lower Half)
     float ey0 = divY + 16.0f;
-    ui.drawText("OPPOSING FORCE (HOSTILE ENEMY AI):", leftX + 14.0f, ey0, 11.0f, ORANGE, true);
+    NationId curAxisNation = enemyNation_;
+    int curAxisGenIdx = enemyGeneralIdx_;
+    if (is2v2) {
+        Rectangle tabE1 = {leftX + 12.0f, ey0 - 4.0f, 155.0f, 24.0f};
+        Rectangle tabE2 = {leftX + 172.0f, ey0 - 4.0f, 165.0f, 24.0f};
+        if (drawOptionCard(tabE1, "[E1] OPPOSING FORCE 1", "", selectedAxisSlot_ == 0, RED)) {
+            sound_.playSfx(SfxId::UI_CLICK);
+            selectedAxisSlot_ = 0;
+        }
+        if (drawOptionCard(tabE2, "[E2] OPPOSING FORCE 2", "", selectedAxisSlot_ == 1, Color{250, 95, 75, 255})) {
+            sound_.playSfx(SfxId::UI_CLICK);
+            selectedAxisSlot_ = 1;
+        }
+        if (selectedAxisSlot_ == 1) {
+            curAxisNation = enemy2Nation_;
+            curAxisGenIdx = enemy2GeneralIdx_;
+        }
+    } else {
+        ui.drawText("OPPOSING FORCE (HOSTILE ENEMY AI):", leftX + 14.0f, ey0, 11.0f, ORANGE, true);
+    }
 
     // Enemy Nations
     for (int i = 0; i < 5; ++i) {
         NationId nid = nationOrder[i];
-        Rectangle nr = {leftX + 12.0f + i * (nBtnW + 3.0f), ey0 + 18.0f, nBtnW, nBtnH};
-        if (drawNationChip(nr, nid, enemyNation_ == nid, true)) {
+        Rectangle nr = {leftX + 12.0f + i * (nBtnW + 3.0f), ey0 + (is2v2 ? 26.0f : 18.0f), nBtnW, nBtnH};
+        if (drawNationChip(nr, nid, curAxisNation == nid, true)) {
             sound_.playSfx(SfxId::UI_CLICK);
-            enemyNation_ = nid;
-            enemyGeneralIdx_ = 0;
+            if (is2v2 && selectedAxisSlot_ == 1) {
+                enemy2Nation_ = nid;
+                enemy2GeneralIdx_ = 0;
+            } else {
+                enemyNation_ = nid;
+                enemyGeneralIdx_ = 0;
+            }
         }
     }
 
     // Enemy Generals
-    const auto& eNat = gd.getNation(enemyNation_);
-    float eyGen = ey0 + 18.0f + nBtnH + 10.0f;
+    const auto& eNat = gd.getNation(curAxisNation);
+    float eyGen = ey0 + (is2v2 ? 26.0f : 18.0f) + nBtnH + 10.0f;
     for (int g = 0; g < static_cast<int>(eNat.generals.size()); ++g) {
         Rectangle gr = {leftX + 12.0f + g * (gBtnW + 2.0f), eyGen, gBtnW, gBtnH};
-        if (drawCommanderChip(gr, eNat.generals[g].name.c_str(), enemyGeneralIdx_ == g, true)) {
+        if (drawCommanderChip(gr, eNat.generals[g].name.c_str(), curAxisGenIdx == g, true)) {
             sound_.playSfx(SfxId::UI_CLICK);
-            enemyGeneralIdx_ = g;
+            if (is2v2 && selectedAxisSlot_ == 1) {
+                enemy2GeneralIdx_ = g;
+            } else {
+                enemyGeneralIdx_ = g;
+            }
         }
     }
 
     // Enemy Doctrine Dossier Card
-    const auto& eGen = gd.getGeneral(enemyNation_, enemyGeneralIdx_);
+    const auto& eGen = gd.getGeneral(curAxisNation, curAxisGenIdx);
     float eyDoc = eyGen + gBtnH + 10.0f;
     Rectangle eDocRec = {leftX + 12.0f, eyDoc, leftW - 24.0f, docH};
     DrawRectangleRec(eDocRec, Color{22, 14, 14, 230});
     DrawRectangleLinesEx(eDocRec, 1.0f, Color{95, 50, 50, 180});
-    DrawRectangle(static_cast<int>(eDocRec.x), static_cast<int>(eDocRec.y), 3, static_cast<int>(eDocRec.height), ORANGE);
-    ui.drawText(TextFormat("HOSTILE DOCTRINE : %s -- %s", eGen.name.c_str(), eGen.specialty.c_str()),
+    DrawRectangle(static_cast<int>(eDocRec.x), static_cast<int>(eDocRec.y), 3, static_cast<int>(eDocRec.height), (is2v2 && selectedAxisSlot_ == 1) ? Color{250, 95, 75, 255} : ORANGE);
+    const char* eSlotRole = (is2v2 && selectedAxisSlot_ == 1) ? "OPPOSING FORCE 2 (AI)" : "OPPOSING FORCE 1 (AI)";
+    ui.drawText(TextFormat("[%s] %s : %s -- %s", eSlotRole, eNat.shortName.c_str(), eGen.name.c_str(), eGen.specialty.c_str()),
                 eDocRec.x + 12.0f, eDocRec.y + 8.0f, 12.0f, ORANGE, true);
     ui.drawText(TextFormat("Command Perk: %s", eGen.passiveDesc.c_str()),
                 eDocRec.x + 12.0f, eDocRec.y + 28.0f, 11.0f, Color{250, 220, 210, 245}, false);
@@ -892,16 +921,54 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
     Rectangle footRec = {leftX + 12.0f, pyFoot, leftW - 24.0f, footH};
     DrawRectangleRec(footRec, Color{14, 20, 17, 215});
     DrawRectangleLinesEx(footRec, 1.0f, Color{45, 65, 55, 160});
-    ui.drawText(TextFormat("TACTICAL ENGAGEMENT: %s (You) vs. %s (AI)", pNat.shortName.c_str(), eNat.shortName.c_str()),
-                footRec.x + 14.0f, footRec.y + 12.0f, 11.5f, GOLD, true);
-    ui.drawText("Headquarters provide continuous defensive artillery, engineer repair, and medical supply.",
-                footRec.x + 14.0f, footRec.y + 32.0f, 10.0f, Color{180, 205, 195, 220}, false);
+
+    if (is2v2) {
+        const auto& aNat = gd.getNation(allyNation_);
+        const auto& e2Nat = gd.getNation(enemy2Nation_);
+        ui.drawText(TextFormat("2v2 COALITION WAR: %s (You) + %s (Ally)  VS.  %s (E1) + %s (E2)",
+                               pNat.shortName.c_str(), aNat.shortName.c_str(), eNat.shortName.c_str(), e2Nat.shortName.c_str()),
+                    footRec.x + 14.0f, footRec.y + 12.0f, 11.5f, GOLD, true);
+        ui.drawText("Allied forces share defensive calls, coordinated pings [Y], and territorial synergies.",
+                    footRec.x + 14.0f, footRec.y + 32.0f, 10.0f, Color{180, 205, 195, 220}, false);
+
+        // Historical 2v2 Presets
+        Rectangle p1Btn = {footRec.x + footRec.width - 370.0f, footRec.y + 14.0f, 102.0f, 34.0f};
+        Rectangle p2Btn = {footRec.x + footRec.width - 262.0f, footRec.y + 14.0f, 102.0f, 34.0f};
+        if (DrawMilitaryButton(p1Btn, "1944 W.EUR", Color{36, 52, 44, 255}, SKYBLUE, 10)) {
+            selectedNation_ = NationId::USA; selectedGeneralIdx_ = 0;
+            allyNation_ = NationId::UK; allyGeneralIdx_ = 0;
+            enemyNation_ = NationId::GER; enemyGeneralIdx_ = 0;
+            enemy2Nation_ = NationId::JPN; enemy2GeneralIdx_ = 0;
+            sound_.playSfx(SfxId::UI_CLICK);
+        }
+        if (DrawMilitaryButton(p2Btn, "EAST FRONT", Color{36, 52, 44, 255}, SKYBLUE, 10)) {
+            selectedNation_ = NationId::USSR; selectedGeneralIdx_ = 0;
+            allyNation_ = NationId::USA; allyGeneralIdx_ = 0;
+            enemyNation_ = NationId::GER; enemyGeneralIdx_ = 0;
+            enemy2Nation_ = NationId::JPN; enemy2GeneralIdx_ = 0;
+            sound_.playSfx(SfxId::UI_CLICK);
+        }
+    } else {
+        ui.drawText(TextFormat("TACTICAL ENGAGEMENT: %s (You) vs. %s (AI)", pNat.shortName.c_str(), eNat.shortName.c_str()),
+                    footRec.x + 14.0f, footRec.y + 12.0f, 11.5f, GOLD, true);
+        ui.drawText("Headquarters provide continuous defensive artillery, engineer repair, and medical supply.",
+                    footRec.x + 14.0f, footRec.y + 32.0f, 10.0f, Color{180, 205, 195, 220}, false);
+    }
 
     Rectangle rndBtn = {footRec.x + footRec.width - 155.0f, footRec.y + 14.0f, 142.0f, 34.0f};
     if (DrawMilitaryButton(rndBtn, "[R] RANDOMIZE", Color{45, 62, 52, 255}, GOLD, 11)) {
         NationId pool[5] = {NationId::USA, NationId::UK, NationId::USSR, NationId::GER, NationId::JPN};
-        enemyNation_ = pool[GetRandomValue(0, 4)];
-        enemyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemyNation_).generals.size()) - 1);
+        if (is2v2) {
+            enemyNation_ = pool[GetRandomValue(0, 4)];
+            enemyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemyNation_).generals.size()) - 1);
+            allyNation_ = pool[GetRandomValue(0, 4)];
+            allyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(allyNation_).generals.size()) - 1);
+            enemy2Nation_ = pool[GetRandomValue(0, 4)];
+            enemy2GeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemy2Nation_).generals.size()) - 1);
+        } else {
+            enemyNation_ = pool[GetRandomValue(0, 4)];
+            enemyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemyNation_).generals.size()) - 1);
+        }
         sound_.playSfx(SfxId::UI_CLICK);
     }
 
@@ -943,22 +1010,21 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
         ui.drawText(TextFormat("[E1] %s (AI)", gd.getNation(enemyNation_).name.c_str()), rosterRec.x + rosterRec.width * 0.54f + 28.0f, rosterRec.y + 11.0f, 11.0f, RED, true);
     } else if (selectedGameMode_ == 1) {
         // 2v2
-        auto [allyNat, enemy2Nat] = get2v2ExtraNations(selectedNation_, enemyNation_);
         const auto& pFlag = ui.getNationFlag(selectedNation_);
-        const auto& aFlag = ui.getNationFlag(allyNat);
+        const auto& aFlag = ui.getNationFlag(allyNation_);
         const auto& eFlag = ui.getNationFlag(enemyNation_);
-        const auto& e2Flag = ui.getNationFlag(enemy2Nat);
+        const auto& e2Flag = ui.getNationFlag(enemy2Nation_);
 
         float ax = rosterRec.x + 8.0f;
         if (pFlag.id != 0) DrawTexturePro(pFlag, {0,0,(float)pFlag.width,(float)pFlag.height}, {ax, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
         if (aFlag.id != 0) DrawTexturePro(aFlag, {0,0,(float)aFlag.width,(float)aFlag.height}, {ax + 22.0f, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
-        std::string allyStr = TextFormat("[ALLIES] %s (You) + %s (AI)", gd.getNation(selectedNation_).shortName.c_str(), gd.getNation(allyNat).shortName.c_str());
+        std::string allyStr = TextFormat("[ALLIES] %s (You) + %s (AI)", gd.getNation(selectedNation_).shortName.c_str(), gd.getNation(allyNation_).shortName.c_str());
         ui.drawText(allyStr.c_str(), ax + 46.0f, rosterRec.y + 11.0f, 10.5f, SKYBLUE, true);
 
         float ex = rosterRec.x + rosterRec.width * 0.52f;
         if (eFlag.id != 0) DrawTexturePro(eFlag, {0,0,(float)eFlag.width,(float)eFlag.height}, {ex, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
         if (e2Flag.id != 0) DrawTexturePro(e2Flag, {0,0,(float)e2Flag.width,(float)e2Flag.height}, {ex + 22.0f, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
-        std::string axisStr = TextFormat("[AXIS] %s (E1) + %s (E2 AI)", gd.getNation(enemyNation_).shortName.c_str(), gd.getNation(enemy2Nat).shortName.c_str());
+        std::string axisStr = TextFormat("[OPPOSITION] %s (E1) + %s (E2 AI)", gd.getNation(enemyNation_).shortName.c_str(), gd.getNation(enemy2Nation_).shortName.c_str());
         ui.drawText(axisStr.c_str(), ex + 46.0f, rosterRec.y + 11.0f, 10.5f, ORANGE, true);
     } else if (selectedGameMode_ == 2) {
         // 3P FFA
@@ -1190,9 +1256,8 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
             cfg.numPlayers = 2;
         } else if (selectedGameMode_ == 1) {
             cfg.numPlayers = 4;
-            auto [allyNat, enemy2Nat] = get2v2ExtraNations(selectedNation_, enemyNation_);
-            cfg.extraNations = { allyNat, enemy2Nat };
-            cfg.extraGeneralIdxs = {0, 0};
+            cfg.extraNations = { allyNation_, enemy2Nation_ };
+            cfg.extraGeneralIdxs = { allyGeneralIdx_, enemy2GeneralIdx_ };
         } else if (selectedGameMode_ == 2) {
             cfg.numPlayers = 3;
             NationId n2 = NationId::USSR;

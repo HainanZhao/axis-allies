@@ -331,6 +331,8 @@ void RTSEngine::startBattle(const RTSBattleConfig& cfg, SoundEngine* sound) {
     pendingSpecOpIdx_ = -1;
     pendingAirMissionType_ = -1;
     aiAirMissionTimer_ = 0.0f;
+    alliedPingPos_ = {0.0f, 0.0f, 0.0f};
+    alliedPingTimer_ = 0.0f;
 
     numPlayers_ = std::clamp(cfg.numPlayers, 2, kMaxPlayers);
 
@@ -740,6 +742,10 @@ void RTSEngine::update(float dt) {
         updateSupplyNetwork();
     }
 
+    if (alliedPingTimer_ > 0.0f) {
+        alliedPingTimer_ = std::max(0.0f, alliedPingTimer_ - simDt);
+    }
+
     updateEconomy(simDt);
     updateBuildings(simDt);
     updateRegiments(simDt);
@@ -847,12 +853,18 @@ void RTSEngine::updateEconomy(float dt) {
         int townCount = 0;
         int oilCount = 0;
         for (const auto& b : buildings_) {
-            if (b.teamId != t || !b.inSupply || b.isUnderConstruction) continue;
+            if (b.health <= 0.0f || !b.inSupply || b.isUnderConstruction) continue;
+            bool isOurOrAllied = (b.teamId == t);
+            if (config_.gameMode == BattleGameMode::ALLIED_2V2 && isAllied(b.teamId, t)) {
+                isOurOrAllied = true;
+            }
+            if (!isOurOrAllied) continue;
+
             if (b.type == BuildingType::CITY_DEPOT) {
                 townCount++;
             } else if (b.type == BuildingType::OIL_DERRICK) {
                 oilCount++;
-            } else {
+            } else if (b.teamId == t) {
                 const auto& bDef = gd.getBuilding(b.type);
                 mRate += bDef.incomeMoney;
                 aRate += bDef.incomeAmmo;
@@ -2164,17 +2176,18 @@ void RTSEngine::updateAI(float dt) {
         }
 
         // Tactical Objective & Target Sector Determination (Fog of War & Multi-Enemy Aware)
-        // In Survival / FFA: The AI selects its focus dynamically among ALL enemies (Player and other AI).
-        // It does NOT cheat through Fog of War: an enemy base is only targeted if scouted or revealed!
+        // In 2v2 / Survival / FFA: The AI selects its focus dynamically among hostile enemies.
+        // Friendly AI Ally shares live vision and player's explored map; Enemy AI strictly respects Fog of War!
         Vector3 primarySectorTarget = {0.0f, 0.0f, 0.0f};
         bool hasScoutedEnemyBase = false;
         float closestScoutedDist = 1e9f;
 
-        // Check if any enemy base has been discovered in vision or explored
         for (int other = 0; other < numPlayers_; ++other) {
             if (!isEnemy(t, other) || other >= static_cast<int>(playerBasePositions_.size())) continue;
             Vector3 otherBase = playerBasePositions_[other];
-            if (isPosVisibleToTeam(otherBase, t) || isPosExploredByPlayer(otherBase)) {
+            bool baseKnown = isAllied(0, t) ? (isPosVisibleToTeam(otherBase, t) || isPosExploredByPlayer(otherBase))
+                                            : isPosVisibleToTeam(otherBase, t);
+            if (baseKnown) {
                 float d = distXZ(bPos, otherBase);
                 if (d < closestScoutedDist) {
                     closestScoutedDist = d;
@@ -2185,14 +2198,39 @@ void RTSEngine::updateAI(float dt) {
         }
 
         if (!hasScoutedEnemyBase) {
-            // In 3-Player FFA, distribute scouting corridors:
-            // Team 1 patrols towards the East/Center to contest Team 2!
-            // Team 2 patrols towards the West/Center to contest Team 1!
             if (config_.gameMode == BattleGameMode::SURVIVAL_FFA_3) {
                 float patrolAng = (t == 1) ? 0.35f : 2.80f;
                 primarySectorTarget = { std::cos(patrolAng) * 160.0f, 0.0f, std::sin(patrolAng) * 80.0f };
+            } else if (config_.gameMode == BattleGameMode::ALLIED_2V2) {
+                // In 2v2: Patrol towards the front line corridor to contest the crossing
+                primarySectorTarget = { -bPos.x * 0.65f, 0.0f, -bPos.z * 0.65f };
             } else {
                 primarySectorTarget = {0.0f, 0.0f, 0.0f};
+            }
+        }
+
+        // Mutual Coalition Defense check: Is our own base or our ally's HQ under threat?
+        Vector3 defenseReliefPos = {0.0f, 0.0f, 0.0f};
+        bool needDefenseRelief = false;
+        for (const auto& r : regiments_) {
+            if (isEnemy(t, r.teamId) && r.health > 0.0f) {
+                // Immediate threat to our own base
+                if (distXZ(bPos, r.pos) < 140.0f) {
+                    defenseReliefPos = r.pos;
+                    needDefenseRelief = true;
+                    break;
+                }
+                // Threat to allied base in 2v2
+                for (int ally = 0; ally < numPlayers_; ++ally) {
+                    if (isAllied(t, ally) && ally != t && ally < static_cast<int>(playerBasePositions_.size())) {
+                        if (distXZ(playerBasePositions_[ally], r.pos) < 130.0f) {
+                            defenseReliefPos = r.pos;
+                            needDefenseRelief = true;
+                            break;
+                        }
+                    }
+                }
+                if (needDefenseRelief) break;
             }
         }
 
@@ -2230,28 +2268,27 @@ void RTSEngine::updateAI(float dt) {
             Vector3 objectivePos = primarySectorTarget;
             float closestDist = 1e9f;
 
-            // 1. Search for neutral cities or oil derricks to capture, or enemy-held strategic points
-            for (const auto& b : buildings_) {
-                if (b.type != BuildingType::CITY_DEPOT && b.type != BuildingType::OIL_DERRICK) continue;
-                if (b.teamId < 0 || isEnemy(t, b.teamId)) {
-                    float d = distXZ(bPos, b.pos);
-                    if (d < closestDist) {
-                        closestDist = d;
-                        objectivePos = b.pos;
+            if (needDefenseRelief) {
+                objectivePos = defenseReliefPos;
+            } else if (alliedPingTimer_ > 0.0f && isAllied(0, t)) {
+                // Obey human player's tactical coordinate ping!
+                objectivePos = alliedPingPos_;
+            } else {
+                // 1. Search for neutral cities or oil derricks to capture, or enemy-held strategic points
+                for (const auto& b : buildings_) {
+                    if (b.type != BuildingType::CITY_DEPOT && b.type != BuildingType::OIL_DERRICK) continue;
+                    if (b.teamId < 0 || isEnemy(t, b.teamId)) {
+                        float d = distXZ(bPos, b.pos);
+                        if (d < closestDist) {
+                            closestDist = d;
+                            objectivePos = b.pos;
+                        }
                     }
                 }
-            }
 
-            // 2. If all strategic towns in reach are secured, target scouted enemy structures
-            if (closestDist > 9e8f && hasScoutedEnemyBase) {
-                for (const auto& b : buildings_) {
-                    if (b.health <= 0.0f || !isEnemy(t, b.teamId)) continue;
-                    if (!isPosVisibleToTeam(b.pos, t) && !isPosExploredByPlayer(b.pos)) continue;
-                    float d = distXZ(bPos, b.pos);
-                    if (d < closestDist) {
-                        closestDist = d;
-                        objectivePos = b.pos;
-                    }
+                // 2. If army is ready (>= 4 combat units) or near towns are secured, assault scouted enemy structures / HQ!
+                if (hasScoutedEnemyBase && (aiRegCount >= 4 || closestDist > 250.0f)) {
+                    objectivePos = primarySectorTarget;
                 }
             }
 
@@ -2261,6 +2298,10 @@ void RTSEngine::updateAI(float dt) {
                 if (r.type == RegimentType::RECON_HALFTRACK) {
                     // Fast reconnaissance halftracks scout directly towards strategic points
                     r.targetPos = objectivePos;
+                    r.attackMove = true;
+                } else if (!needDefenseRelief && idx == 0 && aiRegCount >= 4) {
+                    // Base Garrison: 1 squad stays near HQ perimeter for continuous base security
+                    r.targetPos = { bPos.x + toCenter.x * 24.0f, 0.0f, bPos.z + toCenter.z * 24.0f };
                     r.attackMove = true;
                 } else {
                     float spreadX = ((idx % 5) - 2) * 8.0f;
@@ -3461,6 +3502,28 @@ bool RTSEngine::triggerSpecialOp(int teamId, int opIndex, Vector3 targetPos) {
         }
     }
     return true;
+}
+
+int RTSEngine::getAlliedTeamId() const {
+    for (int i = 1; i < numPlayers_; ++i) {
+        if (isAllied(0, i)) return i;
+    }
+    return -1;
+}
+
+void RTSEngine::issueAlliedPingOrder(Vector3 targetPos) {
+    int allyTeam = getAlliedTeamId();
+    if (allyTeam < 0) return;
+
+    alliedPingPos_ = targetPos;
+    alliedPingTimer_ = 8.0f; // 8-second operational coordination window
+
+    const auto& gd = GameData::instance();
+    const auto& aNat = gd.getNation(players_[allyTeam].nation);
+    const auto& aGen = gd.getGeneral(players_[allyTeam].nation, players_[allyTeam].generalIdx);
+    pushLog(TextFormat("ALLIED COALITION [%s - %s]: Roger command! Dispatching mechanized vanguard to designated coordinates!",
+                       aNat.shortName.c_str(), aGen.name.c_str()));
+    if (sound_) sound_->playSfx(SfxId::RADIO_SQUELCH, 0.75f);
 }
 
 // ============================================================================

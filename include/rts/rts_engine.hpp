@@ -301,6 +301,12 @@ public:
     // Special Operations
     bool triggerSpecialOp(int teamId, int opIndex, Vector3 targetPos);
 
+    // Allied Tactical Coordination & Co-op Support (2v2 Allied Mode)
+    int getAlliedTeamId() const;
+    void issueAlliedPingOrder(Vector3 targetPos);
+    Vector3 getAlliedPingPos() const { return alliedPingPos_; }
+    float getAlliedPingTimer() const { return alliedPingTimer_; }
+
     // Air Force Operations (Strictly limited by Operational Airfields: 2 sorties max per Airfield)
     int getOperationalAirfieldCount(int teamId) const;
     int getActiveAirSortiesCount(int teamId) const;
@@ -444,6 +450,8 @@ private:
     Vector3 playerBasePos_ = {0.0f, 0.0f, 440.0f};
     Vector3 enemyBasePos_  = {0.0f, 0.0f, -440.0f};
     Vector3 lastAlertPos_  = {0.0f, 0.0f, 440.0f};
+    Vector3 alliedPingPos_ = {0.0f, 0.0f, 0.0f};
+    float alliedPingTimer_ = 0.0f;
 
     // Procedural Map & Terrain Parameters (Unique rolling hills & valleys per game)
     uint32_t mapSeed_ = 2004u;
