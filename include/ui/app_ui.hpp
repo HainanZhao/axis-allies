@@ -53,8 +53,9 @@ private:
     int allyGeneralIdx_ = 0;
     NationId enemy2Nation_ = NationId::JPN;
     int enemy2GeneralIdx_ = 0;
-    int selectedAlliedSlot_ = 0; // 0=Player 1 (You), 1=Player 2 (Ally AI)
-    int selectedAxisSlot_   = 0; // 0=Enemy 1 (AI), 1=Enemy 2 (AI)
+    NationId enemy3Nation_ = NationId::USSR;
+    int enemy3GeneralIdx_ = 0;
+    int activeSetupSlot_ = 0; // 0=Player 1 (You), 1=Ally (2v2) or Enemy 1, etc.
     int selectedMapIdx_ = 0;
     int selectedDifficulty_ = 1;
     int selectedResourcesPreset_ = 1; // 0=Standard, 1=High, 2=Total War

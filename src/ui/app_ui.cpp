@@ -592,16 +592,16 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
     }
 
     // 3. Top Header: Supreme Command Operational Branding
-    float hX = 54.0f;
-    float hY = 18.0f;
+    float hX = 46.0f;
+    float hY = 16.0f;
     ui.drawText("-- SUPREME HEADQUARTERS : WAR ROOM THEATRE OPERATIONS --", hX, hY, 10.5f, Color{215, 185, 75, 230}, true);
-    ui.drawTextTitle("CUSTOM BATTLE SETUP", hX + 2.0f, hY + 14.0f + 2.0f, 36.0f, Color{0, 0, 0, 230}, true);
-    ui.drawTextTitle("CUSTOM BATTLE SETUP", hX, hY + 14.0f, 36.0f, Color{252, 222, 105, 255}, true);
+    ui.drawTextTitle("CUSTOM BATTLE SETUP", hX + 2.0f, hY + 14.0f + 2.0f, 34.0f, Color{0, 0, 0, 230}, true);
+    ui.drawTextTitle("CUSTOM BATTLE SETUP", hX, hY + 14.0f, 34.0f, Color{252, 222, 105, 255}, true);
     ui.drawText("CONFIGURE COMBATANTS, COMMAND DOCTRINE, THEATRE MAP & SUPPLY ALLOCATION",
-                hX + 2.0f, hY + 52.0f, 11.0f, Color{200, 215, 205, 215}, true);
+                hX + 2.0f, hY + 50.0f, 10.5f, Color{200, 215, 205, 215}, true);
 
-    DrawLineEx({hX, hY + 68.0f}, {static_cast<float>(sw - 54), hY + 68.0f}, 1.2f, Color{178, 154, 96, 175});
-    DrawRectangle(static_cast<int>(sw * 0.5f - 3.0f), static_cast<int>(hY + 68.0f - 2.5f), 6, 6, GOLD);
+    DrawLineEx({hX, hY + 64.0f}, {static_cast<float>(sw - 46), hY + 64.0f}, 1.2f, Color{178, 154, 96, 175});
+    DrawRectangle(static_cast<int>(sw * 0.5f - 3.0f), static_cast<int>(hY + 64.0f - 2.5f), 6, 6, GOLD);
 
     // Keyboard Shortcuts for Rapid Setup
     const auto& maps = gd.getSkirmishMaps();
@@ -615,30 +615,42 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
     }
     if (IsKeyPressed(KEY_TAB)) {
         selectedGameMode_ = (selectedGameMode_ + 1) % 4;
+        activeSetupSlot_ = 0;
         sound_.playSfx(SfxId::UI_CLICK);
     }
     if (IsKeyPressed(KEY_R)) {
         NationId pool[5] = {NationId::USA, NationId::UK, NationId::USSR, NationId::GER, NationId::JPN};
-        int rndNat = GetRandomValue(0, 4);
-        enemyNation_ = pool[rndNat];
+        enemyNation_ = pool[GetRandomValue(0, 4)];
         enemyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemyNation_).generals.size()) - 1);
+        if (selectedGameMode_ == 1) {
+            allyNation_ = pool[GetRandomValue(0, 4)];
+            allyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(allyNation_).generals.size()) - 1);
+            enemy2Nation_ = pool[GetRandomValue(0, 4)];
+            enemy2GeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemy2Nation_).generals.size()) - 1);
+        } else if (selectedGameMode_ >= 2) {
+            enemy2Nation_ = pool[GetRandomValue(0, 4)];
+            enemy2GeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemy2Nation_).generals.size()) - 1);
+            enemy3Nation_ = pool[GetRandomValue(0, 4)];
+            enemy3GeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemy3Nation_).generals.size()) - 1);
+        }
         sound_.playSfx(SfxId::UI_CLICK);
     }
 
-    // 4. Geometry & Two Balanced Strategic Consoles
-    float padX = 54.0f;
-    float topY = 88.0f;
-    float botDockH = 48.0f;
-    float dockY = static_cast<float>(sh) - 34.0f - botDockH - 8.0f;
+    // 4. Geometry & Strategic Consoles
+    float padX = 46.0f;
+    float topY = 78.0f;
+    float botDockH = 44.0f;
+    float maxAvailH = static_cast<float>(sh) - 34.0f - botDockH - 16.0f - topY;
+    float availH = std::min(590.0f, maxAvailH);
+    float dockY = topY + availH + 12.0f;
     float availW = static_cast<float>(sw) - padX * 2.0f;
-    float availH = dockY - topY - 10.0f;
-    float colGap = 20.0f;
-    float leftW = (availW - colGap) * 0.485f;
+    float colGap = 16.0f;
+    float leftW = (availW - colGap) * 0.49f;
     float rightW = availW - leftW - colGap;
     float leftX = padX;
     float rightX = padX + leftW + colGap;
 
-    // Helper: Frosted Translucent Glass Panel (Matching Main Menu Vibe)
+    // Helper: Frosted Translucent Glass Panel
     auto drawSectionPanel = [&](Rectangle rec, const char* title, Color accentCol) {
         DrawRectangleRec({rec.x + 3.0f, rec.y + 3.0f, rec.width, rec.height}, Color{0, 0, 0, 110});
         DrawRectangleGradientV(static_cast<int>(rec.x), static_cast<int>(rec.y),
@@ -647,9 +659,9 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
         DrawRectangleLinesEx({rec.x + 2.0f, rec.y + 2.0f, rec.width - 4.0f, rec.height - 4.0f}, 1.0f, Color{45, 60, 50, 80});
         DrawRectangleLinesEx(rec, 1.2f, Color{55, 75, 65, 175});
         if (title && title[0] != '\0') {
-            ui.drawText(title, rec.x + 14.0f, rec.y + 9.0f, 11.5f, accentCol, true);
-            DrawLineEx({rec.x + 12.0f, rec.y + 25.0f}, {rec.x + rec.width - 12.0f, rec.y + 25.0f}, 1.0f, Color{55, 75, 65, 130});
-            DrawRectangle(static_cast<int>(rec.x + 12.0f), static_cast<int>(rec.y + 24.0f), 3, 3, accentCol);
+            ui.drawText(title, rec.x + 14.0f, rec.y + 8.0f, 11.5f, accentCol, true);
+            DrawLineEx({rec.x + 12.0f, rec.y + 23.0f}, {rec.x + rec.width - 12.0f, rec.y + 23.0f}, 1.0f, Color{55, 75, 65, 130});
+            DrawRectangle(static_cast<int>(rec.x + 12.0f), static_cast<int>(rec.y + 22.0f), 3, 3, accentCol);
         }
     };
 
@@ -659,8 +671,8 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
         bool clicked = hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 
         Color borderCol = isSelected ? activeCol : (hov ? Color{180, 200, 190, 220} : Color{50, 68, 58, 160});
-        Color fillTop = isSelected ? Color{32, 46, 38, 230} : (hov ? Color{26, 36, 30, 215} : Color{14, 20, 17, 195});
-        Color fillBot = isSelected ? Color{18, 28, 22, 235} : (hov ? Color{16, 22, 18, 220} : Color{9, 13, 11, 205});
+        Color fillTop = isSelected ? Color{32, 48, 38, 235} : (hov ? Color{26, 36, 30, 215} : Color{14, 20, 17, 195});
+        Color fillBot = isSelected ? Color{18, 28, 22, 240} : (hov ? Color{16, 22, 18, 220} : Color{9, 13, 11, 205});
 
         DrawRectangleRec({rec.x + 2.0f, rec.y + 2.0f, rec.width, rec.height}, Color{0, 0, 0, 110});
         DrawRectangleGradientV(static_cast<int>(rec.x), static_cast<int>(rec.y),
@@ -672,7 +684,7 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
         }
 
         Color tCol = isSelected ? WHITE : (hov ? Color{240, 245, 240, 255} : Color{195, 210, 200, 225});
-        ui.drawText(title, rec.x + 9.0f, rec.y + 6.0f, 11.5f, tCol, true);
+        ui.drawText(title, rec.x + 9.0f, rec.y + 6.0f, 11.0f, tCol, true);
         if (subtitle && subtitle[0] != '\0') {
             Color sCol = isSelected ? ColorAlpha(activeCol, 0.85f) : Color{135, 155, 145, 190};
             ui.drawText(subtitle, rec.x + 9.0f, rec.y + 22.0f, 9.5f, sCol, false);
@@ -682,73 +694,155 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
     };
 
     // Helper: Nation Chip
-    auto drawNationChip = [&](Rectangle rec, NationId nid, bool isSelected, bool isHostile) -> bool {
+    auto drawNationChip = [&](Rectangle rec, NationId nid, bool isSelected, Color activeCol) -> bool {
         bool hov = CheckCollisionPointRec(mouse, rec);
         bool clicked = hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
         const auto& nat = gd.getNation(nid);
 
-        Color borderCol = isSelected ? (isHostile ? ORANGE : GOLD) : (hov ? Color{180, 200, 190, 220} : Color{50, 68, 58, 160});
-        Color fillTop = isSelected ? (isHostile ? Color{48, 28, 28, 235} : Color{28, 48, 36, 235})
-                                   : (hov ? Color{30, 42, 35, 220} : Color{16, 22, 18, 195});
-        Color fillBot = isSelected ? (isHostile ? Color{32, 16, 16, 240} : Color{18, 32, 24, 240})
-                                   : (hov ? Color{20, 28, 24, 225} : Color{10, 14, 12, 205});
+        Color borderCol = isSelected ? activeCol : (hov ? Color{180, 200, 190, 220} : Color{50, 68, 58, 160});
+        Color fillTop = isSelected ? Color{32, 48, 38, 235} : (hov ? Color{26, 36, 30, 215} : Color{14, 20, 17, 195});
+        Color fillBot = isSelected ? Color{18, 28, 22, 240} : (hov ? Color{16, 22, 18, 220} : Color{9, 13, 11, 205});
 
         DrawRectangleRec({rec.x + 2.0f, rec.y + 2.0f, rec.width, rec.height}, Color{0, 0, 0, 110});
         DrawRectangleGradientV(static_cast<int>(rec.x), static_cast<int>(rec.y),
                                static_cast<int>(rec.width), static_cast<int>(rec.height), fillTop, fillBot);
-        DrawRectangleLinesEx(rec, isSelected ? 1.8f : 1.0f, borderCol);
+        DrawRectangleLinesEx(rec, isSelected ? 2.0f : 1.0f, borderCol);
 
         if (isSelected) {
-            Color barCol = isHostile ? ORANGE : GOLD;
-            DrawRectangle(static_cast<int>(rec.x), static_cast<int>(rec.y), 3, static_cast<int>(rec.height), barCol);
+            DrawRectangle(static_cast<int>(rec.x), static_cast<int>(rec.y), 3, static_cast<int>(rec.height), activeCol);
         }
 
         const Texture2D& flagTex = ui.getNationFlag(nid);
+        float flagW = 28.0f;
+        float flagH = 19.0f;
+        float flagY = rec.y + 8.0f;
+        float flagX = rec.x + 8.0f;
         if (flagTex.id != 0) {
-            float flagW = 28.0f;
-            float flagH = 20.0f;
-            float flagY = rec.y + (rec.height - flagH) * 0.5f;
             DrawTexturePro(flagTex, {0, 0, static_cast<float>(flagTex.width), static_cast<float>(flagTex.height)},
-                           {rec.x + 7.0f, flagY, flagW, flagH}, {0, 0}, 0.0f, WHITE);
-            DrawRectangleLinesEx({rec.x + 7.0f, flagY, flagW, flagH}, 1.0f, Color{255, 255, 255, 70});
+                           {flagX, flagY, flagW, flagH}, {0, 0}, 0.0f, WHITE);
+            DrawRectangleLinesEx({flagX, flagY, flagW, flagH}, 1.0f, Color{255, 255, 255, 70});
         }
 
-        float textX = rec.x + 40.0f;
-        Color textCol = isSelected ? (isHostile ? Color{255, 200, 150, 255} : Color{255, 235, 140, 255}) : (hov ? WHITE : Color{215, 225, 218, 240});
-        ui.drawText(nat.shortName.c_str(), textX, rec.y + 9.0f, 12.0f, textCol, true);
+        float textX = rec.x + 42.0f;
+        Color textCol = isSelected ? WHITE : (hov ? Color{240, 245, 240, 255} : Color{210, 225, 215, 235});
+        ui.drawText(nat.shortName.c_str(), textX, rec.y + 8.0f, 11.5f, textCol, true);
         const char* allTag = (nat.alliance == Alliance::ALLIES) ? "ALLIES" : "AXIS";
         Color tagCol = (nat.alliance == Alliance::ALLIES) ? SKYBLUE : Color{255, 120, 100, 220};
-        ui.drawText(allTag, textX, rec.y + 26.0f, 9.0f, tagCol, false);
+        ui.drawText(allTag, textX, rec.y + 25.0f, 9.0f, tagCol, false);
 
         return clicked;
     };
 
     // Helper: Commander Chip
-    auto drawCommanderChip = [&](Rectangle rec, const char* name, bool isSelected, bool isHostile) -> bool {
+    auto drawCommanderChip = [&](Rectangle rec, const char* name, const char* spec, bool isSelected, Color activeCol) -> bool {
         bool hov = CheckCollisionPointRec(mouse, rec);
         bool clicked = hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 
-        Color borderCol = isSelected ? (isHostile ? ORANGE : GOLD) : (hov ? Color{180, 200, 190, 220} : Color{50, 68, 58, 160});
-        Color fillTop = isSelected ? (isHostile ? Color{52, 32, 32, 235} : Color{34, 52, 40, 235})
-                                   : (hov ? Color{30, 42, 35, 220} : Color{16, 22, 18, 195});
-        Color fillBot = isSelected ? (isHostile ? Color{34, 18, 18, 240} : Color{20, 34, 24, 240})
-                                   : (hov ? Color{20, 28, 24, 225} : Color{10, 14, 12, 205});
+        Color borderCol = isSelected ? activeCol : (hov ? Color{180, 200, 190, 220} : Color{50, 68, 58, 160});
+        Color fillTop = isSelected ? Color{34, 48, 40, 235} : (hov ? Color{26, 36, 30, 215} : Color{14, 20, 17, 195});
+        Color fillBot = isSelected ? Color{18, 28, 22, 240} : (hov ? Color{16, 22, 18, 220} : Color{9, 13, 11, 205});
 
         DrawRectangleRec({rec.x + 2.0f, rec.y + 2.0f, rec.width, rec.height}, Color{0, 0, 0, 110});
         DrawRectangleGradientV(static_cast<int>(rec.x), static_cast<int>(rec.y),
                                static_cast<int>(rec.width), static_cast<int>(rec.height), fillTop, fillBot);
-        DrawRectangleLinesEx(rec, isSelected ? 1.8f : 1.0f, borderCol);
+        DrawRectangleLinesEx(rec, isSelected ? 2.0f : 1.0f, borderCol);
 
         if (isSelected) {
-            Color barCol = isHostile ? ORANGE : GOLD;
-            DrawRectangle(static_cast<int>(rec.x), static_cast<int>(rec.y), 3, static_cast<int>(rec.height), barCol);
+            DrawRectangle(static_cast<int>(rec.x), static_cast<int>(rec.y), 3, static_cast<int>(rec.height), activeCol);
         }
 
-        ui.drawText(isSelected ? "[*]" : "-", rec.x + 7.0f, rec.y + (rec.height - 12.0f) * 0.5f, 10.0f,
-                    isSelected ? (isHostile ? ORANGE : GOLD) : Color{120, 140, 130, 180}, true);
+        Color textCol = isSelected ? WHITE : (hov ? Color{240, 245, 240, 255} : Color{195, 210, 200, 230});
+        ui.drawText(name, rec.x + 8.0f, rec.y + 6.0f, 11.0f, textCol, isSelected);
+        if (spec && spec[0] != '\0') {
+            std::string cleanSpec = spec;
+            size_t ampPos = cleanSpec.find('&');
+            if (ampPos != std::string::npos && ampPos > 4) {
+                cleanSpec = cleanSpec.substr(0, ampPos - 1);
+            }
+            Color sCol = isSelected ? ColorAlpha(activeCol, 0.9f) : Color{140, 160, 150, 200};
+            ui.drawText(cleanSpec.c_str(), rec.x + 8.0f, rec.y + 24.0f, 9.0f, sCol, false);
+        }
 
-        Color textCol = isSelected ? WHITE : (hov ? Color{240, 245, 240, 255} : Color{180, 195, 185, 220});
-        ui.drawText(name, rec.x + 22.0f, rec.y + (rec.height - 12.0f) * 0.5f, 11.0f, textCol, isSelected);
+        return clicked;
+    };
+
+    // Helper: Combatant Slot Definition
+    struct CombatSlot {
+        std::string badge;
+        std::string role;
+        NationId* nation;
+        int* generalIdx;
+        Color accent;
+    };
+
+    std::vector<CombatSlot> slots;
+    if (selectedGameMode_ == 0) {
+        // 1v1 Duel
+        slots.push_back({"[P1] YOU", "EXPEDITIONARY COMMANDER (YOU)", &selectedNation_, &selectedGeneralIdx_, LIME});
+        slots.push_back({"[E1] ENEMY", "OPPOSING FORCE 1 (AI)", &enemyNation_, &enemyGeneralIdx_, RED});
+    } else if (selectedGameMode_ == 1) {
+        // 2v2 Allied Coalition
+        slots.push_back({"[P1] YOU", "EXPEDITIONARY COMMANDER (YOU)", &selectedNation_, &selectedGeneralIdx_, LIME});
+        slots.push_back({"[P2] ALLY", "COALITION ALLY (AI)", &allyNation_, &allyGeneralIdx_, SKYBLUE});
+        slots.push_back({"[E1] ENEMY 1", "OPPOSING FORCE 1 (AI)", &enemyNation_, &enemyGeneralIdx_, RED});
+        slots.push_back({"[E2] ENEMY 2", "OPPOSING FORCE 2 (AI)", &enemy2Nation_, &enemy2GeneralIdx_, Color{250, 95, 75, 255}});
+    } else if (selectedGameMode_ == 2) {
+        // 3P Survival
+        slots.push_back({"[P1] YOU", "EXPEDITIONARY COMMANDER (YOU)", &selectedNation_, &selectedGeneralIdx_, LIME});
+        slots.push_back({"[E1] ENEMY 1", "HOSTILE FORCE 1 (AI)", &enemyNation_, &enemyGeneralIdx_, RED});
+        slots.push_back({"[E2] ENEMY 2", "HOSTILE FORCE 2 (AI)", &enemy2Nation_, &enemy2GeneralIdx_, ORANGE});
+    } else {
+        // 4P FFA
+        slots.push_back({"[P1] YOU", "EXPEDITIONARY COMMANDER (YOU)", &selectedNation_, &selectedGeneralIdx_, LIME});
+        slots.push_back({"[E1] ENEMY 1", "HOSTILE FORCE 1 (AI)", &enemyNation_, &enemyGeneralIdx_, RED});
+        slots.push_back({"[E2] ENEMY 2", "HOSTILE FORCE 2 (AI)", &enemy2Nation_, &enemy2GeneralIdx_, ORANGE});
+        slots.push_back({"[E3] ENEMY 3", "HOSTILE FORCE 3 (AI)", &enemy3Nation_, &enemy3GeneralIdx_, PURPLE});
+    }
+
+    if (activeSetupSlot_ < 0 || activeSetupSlot_ >= static_cast<int>(slots.size())) {
+        activeSetupSlot_ = 0;
+    }
+
+    auto drawSlotTab = [&](Rectangle rec, const CombatSlot& slot, bool isSelected) -> bool {
+        bool hov = CheckCollisionPointRec(mouse, rec);
+        bool clicked = hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+
+        Color borderCol = isSelected ? slot.accent : (hov ? Color{180, 200, 190, 220} : Color{50, 68, 58, 160});
+        Color fillTop = isSelected ? Color{30, 46, 38, 240} : (hov ? Color{24, 34, 28, 220} : Color{13, 18, 15, 205});
+        Color fillBot = isSelected ? Color{16, 26, 20, 245} : (hov ? Color{14, 20, 16, 225} : Color{8, 12, 10, 215});
+
+        DrawRectangleRec({rec.x + 2.0f, rec.y + 2.0f, rec.width, rec.height}, Color{0, 0, 0, 110});
+        DrawRectangleGradientV(static_cast<int>(rec.x), static_cast<int>(rec.y),
+                               static_cast<int>(rec.width), static_cast<int>(rec.height), fillTop, fillBot);
+        DrawRectangleLinesEx(rec, isSelected ? 2.0f : 1.0f, borderCol);
+
+        if (isSelected) {
+            DrawRectangle(static_cast<int>(rec.x), static_cast<int>(rec.y), static_cast<int>(rec.width), 3, slot.accent);
+        }
+
+        ui.drawText(slot.badge.c_str(), rec.x + 8.0f, rec.y + 6.0f, 10.5f, slot.accent, true);
+
+        NationId nid = *(slot.nation);
+        int gIdx = *(slot.generalIdx);
+        const auto& nat = gd.getNation(nid);
+        const auto& gen = gd.getGeneral(nid, gIdx);
+
+        const Texture2D& flagTex = ui.getNationFlag(nid);
+        float flagW = 20.0f;
+        float flagH = 14.0f;
+        float flagY = rec.y + 25.0f;
+        if (flagTex.id != 0) {
+            DrawTexturePro(flagTex, {0, 0, static_cast<float>(flagTex.width), static_cast<float>(flagTex.height)},
+                           {rec.x + 8.0f, flagY, flagW, flagH}, {0, 0}, 0.0f, WHITE);
+            DrawRectangleLinesEx({rec.x + 8.0f, flagY, flagW, flagH}, 1.0f, Color{255, 255, 255, 70});
+        }
+
+        size_t lastSpace = gen.name.find_last_of(' ');
+        std::string sur = (lastSpace != std::string::npos) ? gen.name.substr(lastSpace + 1) : gen.name;
+        std::string label = TextFormat("%s - %s", nat.shortName.c_str(), sur.c_str());
+
+        Color textCol = isSelected ? WHITE : (hov ? Color{235, 245, 240, 255} : Color{185, 205, 195, 220});
+        ui.drawText(label.c_str(), rec.x + 34.0f, rec.y + 25.0f, 10.5f, textCol, isSelected);
 
         return clicked;
     };
@@ -759,181 +853,95 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
     Rectangle leftPanelRec = {leftX, topY, leftW, availH};
     drawSectionPanel(leftPanelRec, "COMBAT FORCES & COMMAND DOCTRINE", GOLD);
 
+    // 1. Combatant Slot Tabs
+    int numSlots = static_cast<int>(slots.size());
+    float tabGap = 6.0f;
+    float tabW = (leftW - 24.0f - (numSlots - 1) * tabGap) / numSlots;
+    float tabH = 48.0f;
+    float ly = topY + 34.0f;
+
+    for (int s = 0; s < numSlots; ++s) {
+        Rectangle tr = {leftX + 12.0f + s * (tabW + tabGap), ly, tabW, tabH};
+        if (drawSlotTab(tr, slots[s], activeSetupSlot_ == s)) {
+            sound_.playSfx(SfxId::UI_CLICK);
+            activeSetupSlot_ = s;
+        }
+    }
+    ly += tabH + 16.0f;
+
+    // Active Slot Data
+    const auto& curSlot = slots[activeSetupSlot_];
+    NationId curNatId = *(curSlot.nation);
+    int curGenIdx = *(curSlot.generalIdx);
+    const auto& curNat = gd.getNation(curNatId);
+    const auto& curGen = gd.getGeneral(curNatId, curGenIdx);
+
+    // 2. Nation Selection
+    ui.drawText(TextFormat("SELECT NATION FOR %s:", curSlot.badge.c_str()), leftX + 14.0f, ly, 11.0f, curSlot.accent, true);
+    ly += 18.0f;
+
     NationId nationOrder[5] = {NationId::USA, NationId::UK, NationId::USSR, NationId::GER, NationId::JPN};
-    float nBtnW = (leftW - 36.0f) / 5.0f;
-    float nBtnH = 56.0f;
-    float gBtnW = (leftW - 30.0f) / 4.0f;
-    float gBtnH = 40.0f;
-
-    // 1. Player Command (Upper Half)
-    float py0 = topY + 34.0f;
-    bool is2v2 = (selectedGameMode_ == 1);
-
-    NationId curAlliedNation = selectedNation_;
-    int curAlliedGenIdx = selectedGeneralIdx_;
-    if (is2v2) {
-        Rectangle tabYou = {leftX + 12.0f, py0 - 4.0f, 155.0f, 24.0f};
-        Rectangle tabAlly = {leftX + 172.0f, py0 - 4.0f, 165.0f, 24.0f};
-        if (drawOptionCard(tabYou, "[P1] YOU (COMMANDER)", "", selectedAlliedSlot_ == 0, LIME)) {
-            sound_.playSfx(SfxId::UI_CLICK);
-            selectedAlliedSlot_ = 0;
-        }
-        if (drawOptionCard(tabAlly, "[P2] ALLY (AI FORCE)", "", selectedAlliedSlot_ == 1, SKYBLUE)) {
-            sound_.playSfx(SfxId::UI_CLICK);
-            selectedAlliedSlot_ = 1;
-        }
-        if (selectedAlliedSlot_ == 1) {
-            curAlliedNation = allyNation_;
-            curAlliedGenIdx = allyGeneralIdx_;
-        }
-    } else {
-        ui.drawText("YOUR EXPEDITIONARY FORCE (PLAYER 1):", leftX + 14.0f, py0, 11.0f, LIME, true);
-    }
-
-    // Player Nations
+    float nGap = 6.0f;
+    float nBtnW = (leftW - 24.0f - 4 * nGap) / 5.0f;
+    float nBtnH = 54.0f;
     for (int i = 0; i < 5; ++i) {
         NationId nid = nationOrder[i];
-        Rectangle nr = {leftX + 12.0f + i * (nBtnW + 3.0f), py0 + (is2v2 ? 26.0f : 18.0f), nBtnW, nBtnH};
-        if (drawNationChip(nr, nid, curAlliedNation == nid, false)) {
+        Rectangle nr = {leftX + 12.0f + i * (nBtnW + nGap), ly, nBtnW, nBtnH};
+        if (drawNationChip(nr, nid, curNatId == nid, curSlot.accent)) {
             sound_.playSfx(SfxId::UI_CLICK);
-            if (is2v2 && selectedAlliedSlot_ == 1) {
-                allyNation_ = nid;
-                allyGeneralIdx_ = 0;
-            } else {
-                selectedNation_ = nid;
-                selectedGeneralIdx_ = 0;
-            }
+            *(curSlot.nation) = nid;
+            *(curSlot.generalIdx) = 0;
         }
     }
+    ly += nBtnH + 16.0f;
 
-    // Player Generals
-    const auto& pNat = gd.getNation(curAlliedNation);
-    float pyGen = py0 + (is2v2 ? 26.0f : 18.0f) + nBtnH + 10.0f;
-    for (int g = 0; g < static_cast<int>(pNat.generals.size()); ++g) {
-        Rectangle gr = {leftX + 12.0f + g * (gBtnW + 2.0f), pyGen, gBtnW, gBtnH};
-        if (drawCommanderChip(gr, pNat.generals[g].name.c_str(), curAlliedGenIdx == g, false)) {
+    // 3. Commander Selection
+    ui.drawText(TextFormat("SELECT HISTORICAL COMMANDER -- %s:", curNat.shortName.c_str()), leftX + 14.0f, ly, 11.0f, GOLD, true);
+    ly += 18.0f;
+
+    float gGap = 6.0f;
+    float gBtnW = (leftW - 24.0f - 3 * gGap) / 4.0f;
+    float gBtnH = 48.0f;
+    for (int g = 0; g < static_cast<int>(curNat.generals.size()); ++g) {
+        Rectangle gr = {leftX + 12.0f + g * (gBtnW + gGap), ly, gBtnW, gBtnH};
+        if (drawCommanderChip(gr, curNat.generals[g].name.c_str(), curNat.generals[g].specialty.c_str(), curGenIdx == g, curSlot.accent)) {
             sound_.playSfx(SfxId::UI_CLICK);
-            if (is2v2 && selectedAlliedSlot_ == 1) {
-                allyGeneralIdx_ = g;
-            } else {
-                selectedGeneralIdx_ = g;
-            }
+            *(curSlot.generalIdx) = g;
         }
     }
+    ly += gBtnH + 16.0f;
 
-    // Player Doctrine Dossier Card
-    const auto& pGen = gd.getGeneral(curAlliedNation, curAlliedGenIdx);
-    float pyDoc = pyGen + gBtnH + 10.0f;
-    float docH = 104.0f;
-    Rectangle pDocRec = {leftX + 12.0f, pyDoc, leftW - 24.0f, docH};
-    DrawRectangleRec(pDocRec, Color{12, 19, 15, 230});
-    DrawRectangleLinesEx(pDocRec, 1.0f, Color{50, 85, 65, 180});
-    DrawRectangle(static_cast<int>(pDocRec.x), static_cast<int>(pDocRec.y), 3, static_cast<int>(pDocRec.height), (is2v2 && selectedAlliedSlot_ == 1) ? SKYBLUE : LIME);
-    const char* slotRole = (is2v2 && selectedAlliedSlot_ == 1) ? "COALITION ALLY (AI)" : "EXPEDITIONARY COMMANDER (YOU)";
-    ui.drawText(TextFormat("[%s] %s : %s -- %s", slotRole, pNat.shortName.c_str(), pGen.name.c_str(), pGen.specialty.c_str()),
-                pDocRec.x + 12.0f, pDocRec.y + 8.0f, 12.0f, GOLD, true);
-    ui.drawText(TextFormat("Command Perk: %s", pGen.passiveDesc.c_str()),
-                pDocRec.x + 12.0f, pDocRec.y + 28.0f, 11.0f, Color{220, 245, 225, 245}, false);
-    ui.drawText(TextFormat("Signature Hardware: %s   --   \"%s\"", pNat.signatureUnitName.c_str(), pNat.motto.c_str()),
-                pDocRec.x + 12.0f, pDocRec.y + 50.0f, 10.5f, Color{195, 218, 180, 230}, false);
-    ui.drawText("Air & Field Ops: Fighter CAP [J], Bombing Run [B], Aerial Recon [E], Paratroops [P], Rations [R]",
-                pDocRec.x + 12.0f, pDocRec.y + 72.0f, 10.0f, SKYBLUE, false);
+    // 4. Commander Dossier Card
+    float docH = 110.0f;
+    Rectangle docRec = {leftX + 12.0f, ly, leftW - 24.0f, docH};
+    DrawRectangleRec(docRec, Color{12, 19, 15, 230});
+    DrawRectangleLinesEx(docRec, 1.0f, Color{50, 85, 65, 180});
+    DrawRectangle(static_cast<int>(docRec.x), static_cast<int>(docRec.y), 3, static_cast<int>(docRec.height), curSlot.accent);
 
-    // Section Divider
-    float divY = pyDoc + docH + 18.0f;
-    DrawLineEx({leftX + 14.0f, divY}, {leftX + leftW - 14.0f, divY}, 1.0f, Color{55, 75, 65, 140});
-    DrawRectangle(static_cast<int>(leftX + leftW * 0.5f - 2.0f), static_cast<int>(divY - 2.0f), 4, 4, GOLD);
+    ui.drawText(TextFormat("[%s] %s : %s -- %s", curSlot.role.c_str(), curNat.name.c_str(), curGen.name.c_str(), curGen.specialty.c_str()),
+                docRec.x + 12.0f, docRec.y + 8.0f, 11.5f, GOLD, true);
+    ui.drawText(TextFormat("Command Perk: %s", curGen.passiveDesc.c_str()),
+                docRec.x + 12.0f, docRec.y + 30.0f, 10.5f, Color{220, 245, 225, 245}, false);
+    ui.drawText(TextFormat("Signature Hardware: %s   |   Motto: \"%s\"", curNat.signatureUnitName.c_str(), curNat.motto.c_str()),
+                docRec.x + 12.0f, docRec.y + 52.0f, 10.0f, Color{195, 218, 180, 230}, false);
 
-    // 2. Enemy Command (Lower Half)
-    float ey0 = divY + 16.0f;
-    NationId curAxisNation = enemyNation_;
-    int curAxisGenIdx = enemyGeneralIdx_;
-    if (is2v2) {
-        Rectangle tabE1 = {leftX + 12.0f, ey0 - 4.0f, 155.0f, 24.0f};
-        Rectangle tabE2 = {leftX + 172.0f, ey0 - 4.0f, 165.0f, 24.0f};
-        if (drawOptionCard(tabE1, "[E1] OPPOSING FORCE 1", "", selectedAxisSlot_ == 0, RED)) {
-            sound_.playSfx(SfxId::UI_CLICK);
-            selectedAxisSlot_ = 0;
-        }
-        if (drawOptionCard(tabE2, "[E2] OPPOSING FORCE 2", "", selectedAxisSlot_ == 1, Color{250, 95, 75, 255})) {
-            sound_.playSfx(SfxId::UI_CLICK);
-            selectedAxisSlot_ = 1;
-        }
-        if (selectedAxisSlot_ == 1) {
-            curAxisNation = enemy2Nation_;
-            curAxisGenIdx = enemy2GeneralIdx_;
-        }
-    } else {
-        ui.drawText("OPPOSING FORCE (HOSTILE ENEMY AI):", leftX + 14.0f, ey0, 11.0f, ORANGE, true);
-    }
+    std::string opsStr = TextFormat("Special Operations: [1] %s (%d CP)   [2] %s (%d CP)   [3] %s (%d CP)",
+                                    curGen.specialOps[0].name.c_str(), curGen.specialOps[0].commandPointCost,
+                                    curGen.specialOps[1].name.c_str(), curGen.specialOps[1].commandPointCost,
+                                    curGen.specialOps[2].name.c_str(), curGen.specialOps[2].commandPointCost);
+    ui.drawText(opsStr.c_str(), docRec.x + 12.0f, docRec.y + 74.0f, 9.5f, SKYBLUE, false);
+    ly += docH + 16.0f;
 
-    // Enemy Nations
-    for (int i = 0; i < 5; ++i) {
-        NationId nid = nationOrder[i];
-        Rectangle nr = {leftX + 12.0f + i * (nBtnW + 3.0f), ey0 + (is2v2 ? 26.0f : 18.0f), nBtnW, nBtnH};
-        if (drawNationChip(nr, nid, curAxisNation == nid, true)) {
-            sound_.playSfx(SfxId::UI_CLICK);
-            if (is2v2 && selectedAxisSlot_ == 1) {
-                enemy2Nation_ = nid;
-                enemy2GeneralIdx_ = 0;
-            } else {
-                enemyNation_ = nid;
-                enemyGeneralIdx_ = 0;
-            }
-        }
-    }
+    // 5. Quick Presets & Randomize Bar
+    Rectangle presetRec = {leftX + 12.0f, ly, leftW - 24.0f, 42.0f};
+    DrawRectangleRec(presetRec, Color{14, 20, 17, 215});
+    DrawRectangleLinesEx(presetRec, 1.0f, Color{45, 65, 55, 160});
 
-    // Enemy Generals
-    const auto& eNat = gd.getNation(curAxisNation);
-    float eyGen = ey0 + (is2v2 ? 26.0f : 18.0f) + nBtnH + 10.0f;
-    for (int g = 0; g < static_cast<int>(eNat.generals.size()); ++g) {
-        Rectangle gr = {leftX + 12.0f + g * (gBtnW + 2.0f), eyGen, gBtnW, gBtnH};
-        if (drawCommanderChip(gr, eNat.generals[g].name.c_str(), curAxisGenIdx == g, true)) {
-            sound_.playSfx(SfxId::UI_CLICK);
-            if (is2v2 && selectedAxisSlot_ == 1) {
-                enemy2GeneralIdx_ = g;
-            } else {
-                enemyGeneralIdx_ = g;
-            }
-        }
-    }
-
-    // Enemy Doctrine Dossier Card
-    const auto& eGen = gd.getGeneral(curAxisNation, curAxisGenIdx);
-    float eyDoc = eyGen + gBtnH + 10.0f;
-    Rectangle eDocRec = {leftX + 12.0f, eyDoc, leftW - 24.0f, docH};
-    DrawRectangleRec(eDocRec, Color{22, 14, 14, 230});
-    DrawRectangleLinesEx(eDocRec, 1.0f, Color{95, 50, 50, 180});
-    DrawRectangle(static_cast<int>(eDocRec.x), static_cast<int>(eDocRec.y), 3, static_cast<int>(eDocRec.height), (is2v2 && selectedAxisSlot_ == 1) ? Color{250, 95, 75, 255} : ORANGE);
-    const char* eSlotRole = (is2v2 && selectedAxisSlot_ == 1) ? "OPPOSING FORCE 2 (AI)" : "OPPOSING FORCE 1 (AI)";
-    ui.drawText(TextFormat("[%s] %s : %s -- %s", eSlotRole, eNat.shortName.c_str(), eGen.name.c_str(), eGen.specialty.c_str()),
-                eDocRec.x + 12.0f, eDocRec.y + 8.0f, 12.0f, ORANGE, true);
-    ui.drawText(TextFormat("Command Perk: %s", eGen.passiveDesc.c_str()),
-                eDocRec.x + 12.0f, eDocRec.y + 28.0f, 11.0f, Color{250, 220, 210, 245}, false);
-    ui.drawText(TextFormat("Signature Hardware: %s   --   \"%s\"", eNat.signatureUnitName.c_str(), eNat.motto.c_str()),
-                eDocRec.x + 12.0f, eDocRec.y + 50.0f, 10.5f, Color{235, 180, 155, 230}, false);
-    ui.drawText("Hostile AI: Aggressive mechanized spearheads, territory expansion & artillery barrages",
-                eDocRec.x + 12.0f, eDocRec.y + 72.0f, 10.0f, Color{240, 150, 130, 220}, false);
-
-    // Intelligence Summary & Match Randomizer Strip
-    float pyFoot = eyDoc + docH + 16.0f;
-    float footH = leftPanelRec.y + leftPanelRec.height - pyFoot - 12.0f;
-    Rectangle footRec = {leftX + 12.0f, pyFoot, leftW - 24.0f, footH};
-    DrawRectangleRec(footRec, Color{14, 20, 17, 215});
-    DrawRectangleLinesEx(footRec, 1.0f, Color{45, 65, 55, 160});
-
-    if (is2v2) {
-        const auto& aNat = gd.getNation(allyNation_);
-        const auto& e2Nat = gd.getNation(enemy2Nation_);
-        ui.drawText(TextFormat("2v2 COALITION WAR: %s (You) + %s (Ally)  VS.  %s (E1) + %s (E2)",
-                               pNat.shortName.c_str(), aNat.shortName.c_str(), eNat.shortName.c_str(), e2Nat.shortName.c_str()),
-                    footRec.x + 14.0f, footRec.y + 12.0f, 11.5f, GOLD, true);
-        ui.drawText("Allied forces share defensive calls, coordinated pings [Y], and territorial synergies.",
-                    footRec.x + 14.0f, footRec.y + 32.0f, 10.0f, Color{180, 205, 195, 220}, false);
-
-        // Historical 2v2 Presets
-        Rectangle p1Btn = {footRec.x + footRec.width - 370.0f, footRec.y + 14.0f, 102.0f, 34.0f};
-        Rectangle p2Btn = {footRec.x + footRec.width - 262.0f, footRec.y + 14.0f, 102.0f, 34.0f};
+    if (selectedGameMode_ == 1) {
+        // 2v2 Presets
+        ui.drawText("HISTORICAL PRESETS:", presetRec.x + 12.0f, presetRec.y + 14.0f, 10.5f, Color{180, 205, 195, 220}, true);
+        Rectangle p1Btn = {presetRec.x + presetRec.width - 370.0f, presetRec.y + 6.0f, 115.0f, 30.0f};
+        Rectangle p2Btn = {presetRec.x + presetRec.width - 245.0f, presetRec.y + 6.0f, 115.0f, 30.0f};
         if (DrawMilitaryButton(p1Btn, "1944 W.EUR", Color{36, 52, 44, 255}, SKYBLUE, 10)) {
             selectedNation_ = NationId::USA; selectedGeneralIdx_ = 0;
             allyNation_ = NationId::UK; allyGeneralIdx_ = 0;
@@ -949,25 +957,31 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
             sound_.playSfx(SfxId::UI_CLICK);
         }
     } else {
-        ui.drawText(TextFormat("TACTICAL ENGAGEMENT: %s (You) vs. %s (AI)", pNat.shortName.c_str(), eNat.shortName.c_str()),
-                    footRec.x + 14.0f, footRec.y + 12.0f, 11.5f, GOLD, true);
-        ui.drawText("Headquarters provide continuous defensive artillery, engineer repair, and medical supply.",
-                    footRec.x + 14.0f, footRec.y + 32.0f, 10.0f, Color{180, 205, 195, 220}, false);
+        ui.drawText("COMMAND ASSIGNMENT:", presetRec.x + 12.0f, presetRec.y + 14.0f, 10.5f, Color{180, 205, 195, 220}, true);
+        Rectangle p1Btn = {presetRec.x + presetRec.width - 250.0f, presetRec.y + 6.0f, 120.0f, 30.0f};
+        if (DrawMilitaryButton(p1Btn, "HISTORICAL", Color{36, 52, 44, 255}, SKYBLUE, 10)) {
+            selectedNation_ = NationId::USA; selectedGeneralIdx_ = 0;
+            enemyNation_ = NationId::GER; enemyGeneralIdx_ = 0;
+            enemy2Nation_ = NationId::JPN; enemy2GeneralIdx_ = 0;
+            sound_.playSfx(SfxId::UI_CLICK);
+        }
     }
 
-    Rectangle rndBtn = {footRec.x + footRec.width - 155.0f, footRec.y + 14.0f, 142.0f, 34.0f};
-    if (DrawMilitaryButton(rndBtn, "[R] RANDOMIZE", Color{45, 62, 52, 255}, GOLD, 11)) {
+    Rectangle rndBtn = {presetRec.x + presetRec.width - 122.0f, presetRec.y + 6.0f, 114.0f, 30.0f};
+    if (DrawMilitaryButton(rndBtn, "[R] RANDOMIZE", Color{45, 62, 52, 255}, GOLD, 10)) {
         NationId pool[5] = {NationId::USA, NationId::UK, NationId::USSR, NationId::GER, NationId::JPN};
-        if (is2v2) {
-            enemyNation_ = pool[GetRandomValue(0, 4)];
-            enemyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemyNation_).generals.size()) - 1);
+        enemyNation_ = pool[GetRandomValue(0, 4)];
+        enemyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemyNation_).generals.size()) - 1);
+        if (selectedGameMode_ == 1) {
             allyNation_ = pool[GetRandomValue(0, 4)];
             allyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(allyNation_).generals.size()) - 1);
             enemy2Nation_ = pool[GetRandomValue(0, 4)];
             enemy2GeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemy2Nation_).generals.size()) - 1);
-        } else {
-            enemyNation_ = pool[GetRandomValue(0, 4)];
-            enemyGeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemyNation_).generals.size()) - 1);
+        } else if (selectedGameMode_ >= 2) {
+            enemy2Nation_ = pool[GetRandomValue(0, 4)];
+            enemy2GeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemy2Nation_).generals.size()) - 1);
+            enemy3Nation_ = pool[GetRandomValue(0, 4)];
+            enemy3GeneralIdx_ = GetRandomValue(0, static_cast<int>(gd.getNation(enemy3Nation_).generals.size()) - 1);
         }
         sound_.playSfx(SfxId::UI_CLICK);
     }
@@ -979,107 +993,41 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
     drawSectionPanel(rightPanelRec, "THEATRE OF WAR & RULES OF ENGAGEMENT", GOLD);
 
     // 1. Engagement Game Mode
-    float ry0 = topY + 34.0f;
-    ui.drawText("ENGAGEMENT MODE & COALITION SCALE  [TAB]:", rightX + 14.0f, ry0, 11.0f, GOLD, true);
+    float ry = topY + 34.0f;
+    ui.drawText("ENGAGEMENT MODE & COALITION SCALE [TAB]:", rightX + 14.0f, ry, 11.0f, GOLD, true);
+    ry += 18.0f;
 
     const char* modeNames[4] = {"1v1 DUEL", "2v2 ALLIED", "3P SURVIVAL", "4P FFA"};
     const char* modeSubs[4]  = {"Head-to-head", "Coalition War", "Triangular FFA", "Free-for-all"};
-    float mBtnW = (rightW - 30.0f) * 0.25f;
-    float mBtnH = 42.0f;
+    float mGap = 6.0f;
+    float mBtnW = (rightW - 24.0f - 3 * mGap) * 0.25f;
+    float mBtnH = 46.0f;
     for (int m = 0; m < 4; ++m) {
-        Rectangle mr = {rightX + 12.0f + m * (mBtnW + 2.0f), ry0 + 18.0f, mBtnW, mBtnH};
+        Rectangle mr = {rightX + 12.0f + m * (mBtnW + mGap), ry, mBtnW, mBtnH};
         if (drawOptionCard(mr, modeNames[m], modeSubs[m], selectedGameMode_ == m, GOLD)) {
             sound_.playSfx(SfxId::UI_CLICK);
             selectedGameMode_ = m;
+            activeSetupSlot_ = 0;
         }
     }
+    ry += mBtnH + 16.0f;
 
-    // Dynamic Multi-Nation Roster Bar
-    Rectangle rosterRec = {rightX + 12.0f, ry0 + 18.0f + mBtnH + 8.0f, rightW - 24.0f, 36.0f};
-    DrawRectangleRec(rosterRec, Color{12, 17, 14, 225});
-    DrawRectangleLinesEx(rosterRec, 1.0f, Color{50, 70, 60, 150});
+    // 2. Battlefield Theatre Map Selection (2x4 Grid + Featured Dossier)
+    ui.drawText("THEATRE OF WAR (SELECT MAP [Q / E]):", rightX + 14.0f, ry, 11.0f, GOLD, true);
+    ry += 18.0f;
 
-    if (selectedGameMode_ == 0) {
-        // 1v1
-        const auto& pFlag = ui.getNationFlag(selectedNation_);
-        const auto& eFlag = ui.getNationFlag(enemyNation_);
-        if (pFlag.id != 0) DrawTexturePro(pFlag, {0,0,(float)pFlag.width,(float)pFlag.height}, {rosterRec.x + 8.0f, rosterRec.y + 10.0f, 22.0f, 15.0f}, {0,0}, 0, WHITE);
-        ui.drawText(TextFormat("[P1] %s (You)", gd.getNation(selectedNation_).name.c_str()), rosterRec.x + 36.0f, rosterRec.y + 11.0f, 11.0f, LIME, true);
-        ui.drawText("VS", rosterRec.x + rosterRec.width * 0.47f, rosterRec.y + 11.0f, 11.0f, GOLD, true);
-        if (eFlag.id != 0) DrawTexturePro(eFlag, {0,0,(float)eFlag.width,(float)eFlag.height}, {rosterRec.x + rosterRec.width * 0.54f, rosterRec.y + 10.0f, 22.0f, 15.0f}, {0,0}, 0, WHITE);
-        ui.drawText(TextFormat("[E1] %s (AI)", gd.getNation(enemyNation_).name.c_str()), rosterRec.x + rosterRec.width * 0.54f + 28.0f, rosterRec.y + 11.0f, 11.0f, RED, true);
-    } else if (selectedGameMode_ == 1) {
-        // 2v2
-        const auto& pFlag = ui.getNationFlag(selectedNation_);
-        const auto& aFlag = ui.getNationFlag(allyNation_);
-        const auto& eFlag = ui.getNationFlag(enemyNation_);
-        const auto& e2Flag = ui.getNationFlag(enemy2Nation_);
-
-        float ax = rosterRec.x + 8.0f;
-        if (pFlag.id != 0) DrawTexturePro(pFlag, {0,0,(float)pFlag.width,(float)pFlag.height}, {ax, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
-        if (aFlag.id != 0) DrawTexturePro(aFlag, {0,0,(float)aFlag.width,(float)aFlag.height}, {ax + 22.0f, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
-        std::string allyStr = TextFormat("[ALLIES] %s (You) + %s (AI)", gd.getNation(selectedNation_).shortName.c_str(), gd.getNation(allyNation_).shortName.c_str());
-        ui.drawText(allyStr.c_str(), ax + 46.0f, rosterRec.y + 11.0f, 10.5f, SKYBLUE, true);
-
-        float ex = rosterRec.x + rosterRec.width * 0.52f;
-        if (eFlag.id != 0) DrawTexturePro(eFlag, {0,0,(float)eFlag.width,(float)eFlag.height}, {ex, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
-        if (e2Flag.id != 0) DrawTexturePro(e2Flag, {0,0,(float)e2Flag.width,(float)e2Flag.height}, {ex + 22.0f, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
-        std::string axisStr = TextFormat("[OPPOSITION] %s (E1) + %s (E2 AI)", gd.getNation(enemyNation_).shortName.c_str(), gd.getNation(enemy2Nation_).shortName.c_str());
-        ui.drawText(axisStr.c_str(), ex + 46.0f, rosterRec.y + 11.0f, 10.5f, ORANGE, true);
-    } else if (selectedGameMode_ == 2) {
-        // 3P FFA
-        NationId n2 = NationId::USSR;
-        if (n2 == selectedNation_ || n2 == enemyNation_) n2 = NationId::UK;
-        if (n2 == selectedNation_ || n2 == enemyNation_) n2 = NationId::JPN;
-        const auto& pFlag = ui.getNationFlag(selectedNation_);
-        const auto& e1Flag = ui.getNationFlag(enemyNation_);
-        const auto& e2Flag = ui.getNationFlag(n2);
-
-        float fx1 = rosterRec.x + 8.0f;
-        if (pFlag.id != 0) DrawTexturePro(pFlag, {0,0,(float)pFlag.width,(float)pFlag.height}, {fx1, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
-        ui.drawText(TextFormat("[P1] %s", gd.getNation(selectedNation_).shortName.c_str()), fx1 + 24.0f, rosterRec.y + 11.0f, 10.5f, LIME, true);
-
-        float fx2 = rosterRec.x + rosterRec.width * 0.28f;
-        if (e1Flag.id != 0) DrawTexturePro(e1Flag, {0,0,(float)e1Flag.width,(float)e1Flag.height}, {fx2, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
-        ui.drawText(TextFormat("[E1] %s", gd.getNation(enemyNation_).shortName.c_str()), fx2 + 24.0f, rosterRec.y + 11.0f, 10.5f, RED, true);
-
-        float fx3 = rosterRec.x + rosterRec.width * 0.54f;
-        if (e2Flag.id != 0) DrawTexturePro(e2Flag, {0,0,(float)e2Flag.width,(float)e2Flag.height}, {fx3, rosterRec.y + 10.0f, 20.0f, 14.0f}, {0,0}, 0, WHITE);
-        ui.drawText(TextFormat("[E2] %s", gd.getNation(n2).shortName.c_str()), fx3 + 24.0f, rosterRec.y + 11.0f, 10.5f, ORANGE, true);
-
-        ui.drawText("[SURVIVAL FFA]", rosterRec.x + rosterRec.width - 92.0f, rosterRec.y + 11.0f, 9.5f, GOLD, true);
-    } else {
-        // 4P FFA
-        std::vector<NationId> pool = { NationId::USA, NationId::GER, NationId::USSR, NationId::UK, NationId::JPN };
-        std::vector<NationId> extras;
-        for (auto n : pool) {
-            if (n != selectedNation_ && n != enemyNation_) {
-                extras.push_back(n);
-                if (extras.size() == 2) break;
-            }
-        }
-        ui.drawText(TextFormat("[P1] %s", gd.getNation(selectedNation_).shortName.c_str()), rosterRec.x + 8.0f, rosterRec.y + 11.0f, 10.0f, LIME, true);
-        ui.drawText(TextFormat("[E1] %s", gd.getNation(enemyNation_).shortName.c_str()), rosterRec.x + rosterRec.width * 0.24f, rosterRec.y + 11.0f, 10.0f, RED, true);
-        ui.drawText(TextFormat("[E2] %s", gd.getNation(extras[0]).shortName.c_str()), rosterRec.x + rosterRec.width * 0.48f, rosterRec.y + 11.0f, 10.0f, ORANGE, true);
-        ui.drawText(TextFormat("[E3] %s", gd.getNation(extras[1]).shortName.c_str()), rosterRec.x + rosterRec.width * 0.72f, rosterRec.y + 11.0f, 10.0f, PURPLE, true);
-    }
-
-    // 2. Battlefield Theatre Map Selection (Quick Pills + Featured Card)
-    float ryMap = ry0 + 18.0f + mBtnH + 8.0f + 36.0f + 16.0f;
-    ui.drawText("THEATRE OF WAR (SELECT MAP  [Q / E]):", rightX + 14.0f, ryMap, 11.0f, GOLD, true);
-
-    // 8 Quick-Pick Map Pills (2 rows of 4)
     const char* mapShortNames[8] = {
         "1. Normandy", "2. El Alamein", "3. Stalingrad", "4. Pacific Atoll",
         "5. Kursk Steppe", "6. Ardennes", "7. Rhine Crossing", "8. Berlin Ruins"
     };
 
-    float pillW = (rightW - 33.0f) * 0.25f;
-    float pillH = 32.0f;
+    float pillGap = 6.0f;
+    float pillW = (rightW - 24.0f - 3 * pillGap) * 0.25f;
+    float pillH = 30.0f;
     for (int m = 0; m < static_cast<int>(maps.size()) && m < 8; ++m) {
         int row = m / 4;
         int col = m % 4;
-        Rectangle pr = {rightX + 12.0f + col * (pillW + 3.0f), ryMap + 18.0f + row * (pillH + 4.0f), pillW, pillH};
+        Rectangle pr = {rightX + 12.0f + col * (pillW + pillGap), ry + row * (pillH + 4.0f), pillW, pillH};
         bool sel = (selectedMapIdx_ == m);
         bool hov = CheckCollisionPointRec(mouse, pr);
 
@@ -1092,30 +1040,29 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
             DrawRectangle(static_cast<int>(pr.x), static_cast<int>(pr.y), 3, static_cast<int>(pr.height), GOLD);
         }
 
-        ui.drawText(mapShortNames[m], pr.x + 8.0f, pr.y + 9.0f, 11.0f, sel ? GOLD : (hov ? WHITE : Color{200, 215, 205, 230}), sel);
+        ui.drawText(mapShortNames[m], pr.x + 8.0f, pr.y + 8.0f, 10.5f, sel ? GOLD : (hov ? WHITE : Color{200, 215, 205, 230}), sel);
 
         if (hov && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             sound_.playSfx(SfxId::UI_CLICK);
             selectedMapIdx_ = m;
         }
     }
+    ry += 2 * (pillH + 4.0f) + 10.0f;
 
     // Featured Theatre Showcase Card
     const auto& mapDef = maps[selectedMapIdx_ % maps.size()];
-    float featY = ryMap + 18.0f + 2 * (pillH + 4.0f) + 10.0f;
-    float featH = 160.0f;
-    Rectangle featRec = {rightX + 12.0f, featY, rightW - 24.0f, featH};
+    float featH = 118.0f;
+    Rectangle featRec = {rightX + 12.0f, ry, rightW - 24.0f, featH};
 
     DrawRectangleRec({featRec.x + 2.0f, featRec.y + 2.0f, featRec.width, featRec.height}, Color{0, 0, 0, 110});
     DrawRectangleGradientV(static_cast<int>(featRec.x), static_cast<int>(featRec.y),
                            static_cast<int>(featRec.width), static_cast<int>(featRec.height),
                            Color{20, 32, 26, 240}, Color{12, 18, 15, 240});
-    DrawRectangleLinesEx(featRec, 1.4f, Color{178, 154, 96, 200});
-    DrawRectangle(static_cast<int>(featRec.x), static_cast<int>(featRec.y), 4, static_cast<int>(featRec.height), GOLD);
+    DrawRectangleLinesEx(featRec, 1.2f, Color{178, 154, 96, 200});
+    DrawRectangle(static_cast<int>(featRec.x), static_cast<int>(featRec.y), 3, static_cast<int>(featRec.height), GOLD);
 
-    // Map Title & Biome Badge
     ui.drawTextTitle(TextFormat("%d. %s", (selectedMapIdx_ % maps.size()) + 1, mapDef.name.c_str()),
-                     featRec.x + 14.0f, featRec.y + 10.0f, 18.0f, Color{255, 235, 140, 255}, true);
+                     featRec.x + 14.0f, featRec.y + 8.0f, 17.0f, Color{255, 235, 140, 255}, true);
 
     const char* biomeTag = "[BOCAGE HEDGEROWS]";
     if (mapDef.biome == BiomeType::EL_ALAMEIN_DESERT) biomeTag = "[DESERT DUNES]";
@@ -1127,83 +1074,89 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
     else if (mapDef.biome == BiomeType::BERLIN_RUINS) biomeTag = "[URBAN WARFARE]";
 
     float tagW = 140.0f;
-    Rectangle tagRec = {featRec.x + featRec.width - tagW - 12.0f, featRec.y + 9.0f, tagW, 22.0f};
+    Rectangle tagRec = {featRec.x + featRec.width - tagW - 12.0f, featRec.y + 8.0f, tagW, 22.0f};
     DrawRectangleRec(tagRec, Color{18, 36, 48, 220});
     DrawRectangleLinesEx(tagRec, 1.0f, SKYBLUE);
     ui.drawText(biomeTag, tagRec.x + 8.0f, tagRec.y + 5.0f, 9.5f, SKYBLUE, true);
 
-    // Detailed Intelligence Fields
     ui.drawText(TextFormat("Historical Theatre: %s", mapDef.theater.c_str()),
-                featRec.x + 14.0f, featRec.y + 36.0f, 11.0f, Color{215, 230, 220, 240}, false);
+                featRec.x + 14.0f, featRec.y + 32.0f, 11.0f, Color{215, 230, 220, 240}, false);
     ui.drawText(TextFormat("Terrain Profile: %s", mapDef.description.c_str()),
-                featRec.x + 14.0f, featRec.y + 58.0f, 10.5f, Color{185, 205, 195, 220}, false);
+                featRec.x + 14.0f, featRec.y + 53.0f, 10.5f, Color{185, 205, 195, 220}, false);
 
-    // Strategic Assets Bar
     std::string assetsStr = TextFormat("Scale: %.0fx%.0fm   |   Towns: %d   |   Oil Wells: %d   |   River: %s",
                                        mapDef.mapSize, mapDef.mapSize, mapDef.cityCount, mapDef.oilCount,
                                        mapDef.hasRiver ? "Crossable River" : "Open Plain");
-    ui.drawText(assetsStr.c_str(), featRec.x + 14.0f, featRec.y + 82.0f, 10.5f, GOLD, true);
-
-    // Operational Modifiers Badges
-    DrawLineEx({featRec.x + 14.0f, featRec.y + 106.0f}, {featRec.x + featRec.width - 14.0f, featRec.y + 106.0f}, 1.0f, Color{55, 75, 65, 120});
-
-    Rectangle b1 = {featRec.x + 14.0f, featRec.y + 116.0f, 150.0f, 28.0f};
-    DrawRectangleRec(b1, Color{22, 38, 28, 220});
-    DrawRectangleLinesEx(b1, 1.0f, LIME);
-    ui.drawText("+35% ENTRENCHMENT", b1.x + 10.0f, b1.y + 8.0f, 9.5f, LIME, true);
-
-    Rectangle b2 = {b1.x + b1.width + 10.0f, featRec.y + 116.0f, 150.0f, 28.0f};
-    DrawRectangleRec(b2, Color{20, 32, 44, 220});
-    DrawRectangleLinesEx(b2, 1.0f, SKYBLUE);
-    ui.drawText("CONTESTED AIRSPACE", b2.x + 10.0f, b2.y + 8.0f, 9.5f, SKYBLUE, true);
-
-    Rectangle b3 = {b2.x + b2.width + 10.0f, featRec.y + 116.0f, 160.0f, 28.0f};
-    DrawRectangleRec(b3, Color{36, 28, 20, 220});
-    DrawRectangleLinesEx(b3, 1.0f, GOLD);
-    ui.drawText("75s RATIONS LOGISTICS", b3.x + 10.0f, b3.y + 8.0f, 9.5f, GOLD, true);
+    ui.drawText(assetsStr.c_str(), featRec.x + 14.0f, featRec.y + 78.0f, 10.5f, GOLD, true);
+    ry += featH + 16.0f;
 
     // 3. Match Parameters: Difficulty & Starting Supply Stockpile
-    float ryRules = featY + featH + 16.0f;
-    ui.drawText("RULES OF ENGAGEMENT & LOGISTICS:", rightX + 14.0f, ryRules, 11.0f, GOLD, true);
+    ui.drawText("RULES OF ENGAGEMENT & LOGISTICS ALLOCATION:", rightX + 14.0f, ry, 11.0f, GOLD, true);
+    ry += 18.0f;
 
     // AI Difficulty (3 buttons)
     const char* diffNames[3] = {"RECRUIT", "VETERAN", "FIELD MARSHAL"};
     const char* diffSubs[3]  = {"Standard AI", "Flanking Micro", "Relentless Macro"};
     Color diffColors[3] = {LIME, GOLD, RED};
-    float diffCardW = (rightW - 28.0f) / 3.0f;
+    float diffCardW = (rightW - 24.0f - 2 * 6.0f) / 3.0f;
     float diffCardH = 42.0f;
     for (int d = 0; d < 3; ++d) {
-        Rectangle dr = {rightX + 12.0f + d * (diffCardW + 2.0f), ryRules + 18.0f, diffCardW, diffCardH};
+        Rectangle dr = {rightX + 12.0f + d * (diffCardW + 6.0f), ry, diffCardW, diffCardH};
         if (drawOptionCard(dr, diffNames[d], diffSubs[d], selectedDifficulty_ == d, diffColors[d])) {
             sound_.playSfx(SfxId::UI_CLICK);
             selectedDifficulty_ = d;
         }
     }
+    ry += diffCardH + 8.0f;
 
     // Starting Supply Stockpile (3 buttons)
     const char* resNames[3] = {"STANDARD", "EXPEDITIONARY", "TOTAL WAR"};
-    const char* resSubs[3]  = {"$500M | 400A | 350O", "$800M | 650A | 550O", "$1,400M | 1.1kA | 1kO"};
+    const char* resSubs[3]  = {"$500 Supply", "$800 Supply", "$1,400 Supply"};
     for (int r = 0; r < 3; ++r) {
-        Rectangle rr = {rightX + 12.0f + r * (diffCardW + 2.0f), ryRules + 18.0f + diffCardH + 8.0f, diffCardW, diffCardH};
+        Rectangle rr = {rightX + 12.0f + r * (diffCardW + 6.0f), ry, diffCardW, diffCardH};
         if (drawOptionCard(rr, resNames[r], resSubs[r], selectedResourcesPreset_ == r, GOLD)) {
             sound_.playSfx(SfxId::UI_CLICK);
             selectedResourcesPreset_ = r;
         }
     }
+    ry += diffCardH + 14.0f;
 
-    // Operational Rules Directives Card
-    float ryDir = ryRules + 18.0f + 2 * (diffCardH + 8.0f) + 4.0f;
-    float dirH = rightPanelRec.y + rightPanelRec.height - ryDir - 12.0f;
-    Rectangle dirRec = {rightX + 12.0f, ryDir, rightW - 24.0f, dirH};
-    DrawRectangleRec(dirRec, Color{14, 20, 17, 215});
-    DrawRectangleLinesEx(dirRec, 1.0f, Color{45, 65, 55, 170});
-    DrawRectangle(static_cast<int>(dirRec.x), static_cast<int>(dirRec.y), 3, static_cast<int>(dirRec.height), SKYBLUE);
+    // 4. Operational Matchup Briefing Card
+    float sumH = 58.0f;
+    Rectangle sumRec = {rightX + 12.0f, ry, rightW - 24.0f, sumH};
+    DrawRectangleRec(sumRec, Color{14, 20, 17, 220});
+    DrawRectangleLinesEx(sumRec, 1.0f, Color{45, 65, 55, 170});
+    DrawRectangle(static_cast<int>(sumRec.x), static_cast<int>(sumRec.y), 3, static_cast<int>(sumRec.height), LIME);
 
-    ui.drawText("VICTORY DIRECTIVES & STRATEGIC WARFARE:", dirRec.x + 14.0f, dirRec.y + 10.0f, 11.0f, SKYBLUE, true);
-    ui.drawText("* Elimination: Destroy all hostile Command HQs to break enemy chain of command.",
-                dirRec.x + 14.0f, dirRec.y + 28.0f, 10.0f, Color{220, 235, 225, 230}, false);
-    ui.drawText("* Logistics & Air: Regiments advance with 75s rations; build Supply Depots and Airfields.",
-                dirRec.x + 14.0f, dirRec.y + 46.0f, 10.0f, GOLD, false);
+    std::string matchLine;
+    if (selectedGameMode_ == 0) {
+        matchLine = TextFormat("1v1 DUEL: %s (%s)  VS.  %s (%s)",
+                               gd.getNation(selectedNation_).shortName.c_str(), gd.getGeneral(selectedNation_, selectedGeneralIdx_).name.c_str(),
+                               gd.getNation(enemyNation_).shortName.c_str(), gd.getGeneral(enemyNation_, enemyGeneralIdx_).name.c_str());
+    } else if (selectedGameMode_ == 1) {
+        matchLine = TextFormat("2v2 COALITION: [%s + %s]  VS.  [%s + %s]",
+                               gd.getNation(selectedNation_).shortName.c_str(), gd.getNation(allyNation_).shortName.c_str(),
+                               gd.getNation(enemyNation_).shortName.c_str(), gd.getNation(enemy2Nation_).shortName.c_str());
+    } else if (selectedGameMode_ == 2) {
+        matchLine = TextFormat("3P SURVIVAL: %s (You)  vs.  %s (E1)  vs.  %s (E2)",
+                               gd.getNation(selectedNation_).shortName.c_str(), gd.getNation(enemyNation_).shortName.c_str(),
+                               gd.getNation(enemy2Nation_).shortName.c_str());
+    } else {
+        matchLine = TextFormat("4P FFA: %s (You)  vs.  %s (E1)  vs.  %s (E2)  vs.  %s (E3)",
+                               gd.getNation(selectedNation_).shortName.c_str(), gd.getNation(enemyNation_).shortName.c_str(),
+                               gd.getNation(enemy2Nation_).shortName.c_str(), gd.getNation(enemy3Nation_).shortName.c_str());
+    }
+    ui.drawText(matchLine.c_str(), sumRec.x + 12.0f, sumRec.y + 10.0f, 11.5f, GOLD, true);
+
+    std::string detailLine = TextFormat("THEATRE: %s  |  AI: %s  |  SUPPLY: %s",
+                                        mapDef.name.c_str(), diffNames[selectedDifficulty_], resNames[selectedResourcesPreset_]);
+    ui.drawText(detailLine.c_str(), sumRec.x + 12.0f, sumRec.y + 32.0f, 10.0f, Color{195, 218, 205, 230}, false);
+
+    // Status Badge Button
+    Rectangle statBadge = {sumRec.x + sumRec.width - 152.0f, sumRec.y + 16.0f, 140.0f, 26.0f};
+    DrawRectangleRec(statBadge, Color{18, 38, 26, 220});
+    DrawRectangleLinesEx(statBadge, 1.0f, LIME);
+    ui.drawText("[ READY FOR BATTLE ]", statBadge.x + 10.0f, statBadge.y + 7.0f, 9.5f, LIME, true);
 
     // =========================================================================
     // BOTTOM COMMAND DOCK & ACTION BUTTONS
@@ -1215,25 +1168,19 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
              static_cast<int>(dockRec.x + dockRec.width), static_cast<int>(dockRec.y), Color{178, 154, 96, 200});
 
     // Left Button: << MAIN MENU [ESC]
-    Rectangle backBtn = {dockRec.x + 8.0f, dockRec.y + 5.0f, 180.0f, 38.0f};
+    Rectangle backBtn = {dockRec.x + 8.0f, dockRec.y + 5.0f, 180.0f, 34.0f};
     if (DrawMilitaryButton(backBtn, "<< MAIN MENU [ESC]", Color{54, 34, 34, 255}, Color{180, 80, 80, 220}, 13) ||
         IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_BACKSPACE)) {
         sound_.playSfx(SfxId::UI_CLICK);
         screen_ = ScreenState::MAIN_MENU;
     }
 
-    // Center Status: Live Operational Briefing Readout
-    const char* modeNamesShort[4] = {"1v1 Duel", "2v2 Allied Coalition", "3-Player Survival (FFA)", "4-Player FFA"};
-    const char* diffNamesShort[3] = {"Recruit", "Veteran", "Field Marshal"};
-    const char* resNamesShort[3] = {"Standard ($500)", "High ($800)", "Total War ($1,400)"};
-    std::string briefText = TextFormat("THEATRE: %s   |   MODE: %s   |   SUPPLY: %s   |   AI: %s",
-                                       mapDef.name.c_str(), modeNamesShort[selectedGameMode_],
-                                       resNamesShort[selectedResourcesPreset_], diffNamesShort[selectedDifficulty_]);
-    float briefX = dockRec.x + 205.0f;
-    ui.drawText(briefText.c_str(), briefX, dockRec.y + 17.0f, 11.0f, GOLD, true);
+    // Center Hotkeys Hint
+    ui.drawText("[ENTER] Commence   [TAB] Mode   [Q / E] Cycle Map   [R] Randomize",
+                dockRec.x + dockRec.width * 0.5f - 180.0f, dockRec.y + 14.0f, 11.0f, Color{215, 195, 120, 220}, true);
 
     // Right Button: COMMENCE OPERATION >> [ENTER]
-    Rectangle startBtn = {dockRec.x + dockRec.width - 255.0f, dockRec.y + 5.0f, 245.0f, 38.0f};
+    Rectangle startBtn = {dockRec.x + dockRec.width - 255.0f, dockRec.y + 5.0f, 245.0f, 34.0f};
     if (DrawMilitaryButton(startBtn, "COMMENCE OPERATION >>", Color{34, 76, 42, 255}, GOLD, 15, true) ||
         IsKeyPressed(KEY_ENTER)) {
         sound_.playSfx(SfxId::UI_CONFIRM);
@@ -1260,23 +1207,12 @@ void AxisAlliesApp::renderSkirmishSetupScreen() {
             cfg.extraGeneralIdxs = { allyGeneralIdx_, enemy2GeneralIdx_ };
         } else if (selectedGameMode_ == 2) {
             cfg.numPlayers = 3;
-            NationId n2 = NationId::USSR;
-            if (n2 == selectedNation_ || n2 == enemyNation_) n2 = NationId::UK;
-            if (n2 == selectedNation_ || n2 == enemyNation_) n2 = NationId::JPN;
-            cfg.extraNations = { n2 };
-            cfg.extraGeneralIdxs = { 0 };
+            cfg.extraNations = { enemy2Nation_ };
+            cfg.extraGeneralIdxs = { enemy2GeneralIdx_ };
         } else {
             cfg.numPlayers = 4;
-            std::vector<NationId> pool = { NationId::USA, NationId::GER, NationId::USSR, NationId::UK, NationId::JPN };
-            std::vector<NationId> extras;
-            for (auto n : pool) {
-                if (n != selectedNation_ && n != enemyNation_) {
-                    extras.push_back(n);
-                    if (extras.size() == 2) break;
-                }
-            }
-            cfg.extraNations = extras;
-            cfg.extraGeneralIdxs = { 0, 0 };
+            cfg.extraNations = { enemy2Nation_, enemy3Nation_ };
+            cfg.extraGeneralIdxs = { enemy2GeneralIdx_, enemy3GeneralIdx_ };
         }
 
         rtsEngine_.startBattle(cfg, &sound_);
