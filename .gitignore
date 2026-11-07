@@ -1,0 +1,21 @@
+# Binaries and build artifacts
+bin/
+*.o
+*.d
+*.log
+*.pid
+*.sock
+
+# Compiled raylib static library and objects
+vendor/raylib/src/*.o
+vendor/raylib/src/libraylib.a
+
+# macOS app bundle & system metadata
+Axis & Allies 2004.app/
+.DS_Store
+
+# Codegraph indexing database
+.codegraph/
+
+# Saved games
+saves/
